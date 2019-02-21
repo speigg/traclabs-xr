@@ -1,146 +1,204 @@
 
-import * as THREE from 'three'
+import * as THREE from 'three/src/Three'
 import SpatialMetrics from './lib/SpatialMetrics'
+import store from './store'
+import PRIDEClient from './lib/PRIDEClient'
+
+export interface UpdateEvent {
+    type: 'update'
+    deltaTime: number
+    frame: any
+    frameOfRef: any
+    devicePose: any
+}
+
+export interface AppStartConfig {
+    onUpdate(event: UpdateEvent): void
+}
 
 export default class App {
 
+    store = store
     scene = new THREE.Scene
     camera = new THREE.PerspectiveCamera
-    cameraCenteredMetrics = new SpatialMetrics(this.camera)
+    cameraMetrics = new SpatialMetrics(this.camera)
     renderer = new THREE.WebGLRenderer({
         antialias: false,
-        alpha: true
+        alpha: true,
     })
 
     // a map of XRCoordinateSystem instances and their Object3D proxies to be updated each frame
-    xrObjects = new Map // XRCoordinateSystem -> Three.js Object3D Map
+    xrObjects = new Map<any, THREE.Object3D>() // XRCoordinateSystem -> Three.js Object3D Map
 
     lastFrameTime = -1
 
-    constructor() {
+    private _startConfig?: AppStartConfig
+
+    constructor(public pride: PRIDEClient) {
+        this.scene.add(this.camera)
         this.renderer.vr.enabled = false // manage xr setup manually for now
+
         // this.renderer.setAnimationLoop(this.onAnimate)
 
         // const box = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1), new THREE.MeshNormalMaterial)
         // this.scene.add(box)
     }
 
-    requestVuforiaTrackableFromDataSet() {
+    // requestVuforiaTrackableFromDataSet() {}
 
+    getXRObject3D(xrCoordinateSystem: any) {
+        let xrObject = this.xrObjects.get(xrCoordinateSystem)
+        if (xrObject) { return xrObject }
+        xrObject = new THREE.Object3D();
+        (xrObject as any).xrCoordinateSystem = xrCoordinateSystem
+        this.xrObjects.set(xrCoordinateSystem, xrObject)
+        return xrObject
     }
 
-    getXRObject3D(xrCoordinateSystem) {
-		let xrObject = this.xrObjects.get(xrCoordinateSystem)
-		if (xrObject) return xrObject
-		xrObject = new THREE.Object3D()
-		xrObject.xrCoordinateSystem = xrCoordinateSystem
-		this.xrObjects.set(xrCoordinateSystem, xrObject)
-		return xrObject
-    }
-
-    startXR() {
-        if (!navigator.xr) Promise.reject(new Error('WebXR is not supported by this browser'))
-        return navigator.xr.requestDevice().then((device) => {
-            device.requestSession({immersive:true, type:'augmentation'}).then(this.onSession)
+    start(config: AppStartConfig) {
+        this._startConfig = config
+        return this._startXR().catch(() => {
+            document.documentElement.append(this.renderer.domElement)
+            document.addEventListener('touchstart', (e) => e.preventDefault(), {passive: false} )
+            document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false} )
+            this.renderer.domElement.style.position = 'fixed'
+            this.renderer.domElement.style.width = '100%'
+            this.renderer.domElement.style.height = '100%'
+            this.renderer.domElement.style.top = '0'
+            this.renderer.setPixelRatio(1)
+            const onAnimate = () => {
+                window.requestAnimationFrame(onAnimate)
+                this.update(null, null, null)
+                this.render(null, null, null)
+            }
+            window.requestAnimationFrame(onAnimate)
+            return {session: null, vuforia: null}
         })
     }
 
-    onSession = (session) => {
+    onSession = async (session: any) => {
         const gl = this.renderer.getContext()
-        session.baseLayer = new XRWebGLLayer(session, gl);
-        session.requestFrameOfReference('eye-level').then((eyeLevelFrameOfReference) => {
-            const onAnimate = (frame) => {
+        session.baseLayer = new XRWebGLLayer(session, gl)
+        session.requestFrameOfReference('eye-level').then((eyeLevelFrameOfReference: any) => {
+            const onAnimate = (frame: any) => {
                 session.requestAnimationFrame(onAnimate)
                 const devicePose = frame.getDevicePose(eyeLevelFrameOfReference)
-                this.onUpdate(frame, eyeLevelFrameOfReference, devicePose)
-                this.onRender(frame, eyeLevelFrameOfReference, devicePose)
+                this.update(frame, eyeLevelFrameOfReference, devicePose)
+                this.render(frame, eyeLevelFrameOfReference, devicePose)
             }
             session.requestAnimationFrame(onAnimate)
         })
-        session.requestTracker('ARGON_vuforia', {encryptedLicenseData:VUFORIA_LICENSE_DATA}).then((vuforia) => {
-            this.scene.dispatchEvent({type:'xr-start', session, vuforia})
-        }).catch(()=>{
-            this.scene.dispatchEvent({type:'xr-start', session})
-        })
+        const vuforia = await session.requestTracker('ARGON_vuforia', {encryptedLicenseData: VUFORIA_LICENSE_DATA})
+        return {session, vuforia}
     }
 
-    onUpdate = (frame, frameOfRef, devicePose) => {
+    update = (frame: any, frameOfRef: any, devicePose: any) => {
 
-        if (!devicePose) return
+        if (devicePose) {
+            // update camera
+            this.camera.matrix.fromArray(devicePose.poseModelMatrix)
+            this.camera.updateMatrixWorld(true)
+            // if (frame.views.length === 1) {
+            this.camera.projectionMatrix.fromArray(frame.views[0].projectionMatrix)
+            // } else {
+            //     this.camera.fov = 120
+            //     this.camera.updateProjectionMatrix()
+            // }
+            // this.cameraMetrics.getFovs(this.cameraFovs)
 
-        // update camera
-        this.camera.matrix.fromArray(devicePose.poseModelMatrix)
-        this.camera.updateMatrixWorld(false)
-
-		// update xr objects in the scene graph
-		for (let xrObject of this.xrObjects.values()) {
-			const transform = xrObject.xrCoordinateSystem.getTransformTo(frameOfRef)
-			if (transform) {
-				xrObject.matrixAutoUpdate = false
-				xrObject.matrix.fromArray(transform)
-				xrObject.updateMatrixWorld(true)
-				if (xrObject.parent !== this.scene) {
-					this.scene.add(xrObject)
-					console.log('added xrObject ' + xrObject.xrCoordinateSystem.uid || '')
-				}
-			} else {
-				if (xrObject.parent) {
-					this.scene.remove(xrObject)
-					console.log('removed xrObject ' + xrObject.xrCoordinateSystem.uid || '')
-				}
-			}
-		}
+            // update xr objects in the scene graph
+            for (const xrObject of this.xrObjects.values()) {
+                const xrCoordinateSystem = (xrObject as any).xrCoordinateSystem
+                const transform = xrCoordinateSystem.getTransformTo(frameOfRef)
+                if (transform) {
+                    xrObject.matrixAutoUpdate = false
+                    xrObject.matrix.fromArray(transform)
+                    xrObject.updateMatrixWorld(true)
+                    if (xrObject.parent !== this.scene) {
+                        this.scene.add(xrObject)
+                        console.log('added xrObject ' + xrCoordinateSystem.uid || '')
+                    }
+                } else {
+                    if (xrObject.parent) {
+                    this.scene.remove(xrObject)
+                    console.log('removed xrObject ' + xrCoordinateSystem.uid || '')
+                    }
+                }
+            }
+        }
 
         // emit update event
         const now = performance.now()
-        const deltaTime = Math.min(Math.max((now - this.lastFrameTime)/1000, 0.001),1/60)
+        const deltaTime = Math.min(Math.max((now - this.lastFrameTime) / 1000, 0.001), 1 / 60)
         this.lastFrameTime = now
-        this.scene.dispatchEvent({type:'update', deltaTime, frame, frameOfRef, devicePose})
+        this._startConfig!.onUpdate({type: 'update', deltaTime, frame, frameOfRef, devicePose})
+        // this.scene.dispatchEvent({type: 'update', deltaTime, frame, frameOfRef, devicePose})
     }
 
-    onRender = (frame, frameOfRef, devicePose) => {
-        if (!devicePose) return // nothing to do
+    render = (frame: any, frameOfRef: any, devicePose: any) => {
+        if (!frame) {
+            const width = window.innerWidth
+            const height = window.innerHeight
+            const aspect = width / height
+            this.camera.aspect = aspect
+            this.camera.near = 0.001
+            this.camera.far = 100000
+            this.camera.updateProjectionMatrix()
+            this.renderer.autoClear = false
+            this.renderer.setSize(width, height)
+            this.renderer.render(this.scene, this.camera)
+            return
+        }
 
-		// Prep THREE.js for the render of each XRView
+        if (!devicePose) { return }
+
+        // Prep THREE.js for the render of each XRView
         const baseLayer = frame.session.baseLayer
         this.renderer.autoClear = false
-		this.renderer.setSize(baseLayer.framebufferWidth, baseLayer.framebufferHeight, false)
-		this.renderer.clear()
-		this.camera.matrixAutoUpdate = false
-        
-		// Render each view into this.session.baseLayer.context
-		for(const view of frame.views){
-			// Each XRView has its own projection matrix, so set the camera to use that
-			const viewMatrix = devicePose.getViewMatrix(view)
-			this.camera.matrix.fromArray(viewMatrix).getInverse(this.camera.matrix)
-			this.camera.projectionMatrix.fromArray(view.projectionMatrix)
+        this.renderer.setSize(baseLayer.framebufferWidth, baseLayer.framebufferHeight, false)
+        this.renderer.clear()
+        this.camera.matrixAutoUpdate = false
 
-			// Set up the renderer to the XRView's viewport and then render
-			this.renderer.clearDepth()
-			const viewport = view.getViewport(baseLayer)
-			this.renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height)
-		    this.renderer.render(this.scene, this.camera)
-		}
+        // Render each view into this.session.baseLayer.context
+        for (const view of frame.views) {
+            // Each XRView has its own projection matrix, so set the camera to use that
+            const viewMatrix = devicePose.getViewMatrix(view)
+            this.camera.matrix.fromArray(viewMatrix).getInverse(this.camera.matrix)
+            this.camera.updateMatrixWorld(true)
+            this.camera.projectionMatrix.fromArray(view.projectionMatrix)
+            // Set up the renderer to the XRView's viewport and then render
+            this.renderer.clearDepth()
+            const viewport = view.getViewport(baseLayer)
+            this.renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height)
+            this.renderer.render(this.scene, this.camera)
+        }
     }
 
+    private _startXR() {
+        if (!navigator.xr) { return Promise.reject(new Error('WebXR is not supported by this browser')) }
+        return (navigator.xr.requestDevice() as Promise<any>).then((device: any) => {
+            return (device.requestSession({immersive: true, type: 'augmentation'}) as Promise<any>)
+                .then(this.onSession)
+        })
+    }
 }
 
 declare global {
     interface Navigator {
-        xr:any;
+        xr: any
     }
-    const XRWebGLLayer:any
+    const XRWebGLLayer: any
 }
 
-declare module 'three/three-core' {
+declare module 'three/src/Three' {
     interface WebVRManager {
-        setFrameOfReferenceType(type:string):void
-        setSession(session):void
-        getSession()
+        setFrameOfReferenceType(type: string): void
+        setSession(session: any): void
+        getSession(): any
     }
 }
 
-const VUFORIA_LICENSE_DATA = 
+const VUFORIA_LICENSE_DATA =
 `-----BEGIN PGP MESSAGE-----
 Version: OpenPGP.js v2.3.2
 Comment: http://openpgpjs.org
@@ -194,4 +252,4 @@ nFdFdwvz5jRCeeypNj8l42ENdGcqV8lD0Yk8d9sJ+SmaZ4wcHaPtKgyCfd/s
 TDne/ON+Rnj/EKokFOU=
 =kmoQ
 -----END PGP MESSAGE-----
-`;
+`

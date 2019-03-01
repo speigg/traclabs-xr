@@ -9,7 +9,10 @@
     ]
   },
   "rules": {
+    "curly": false,
     "forin": false,
+    "arrow-parens": false,
+    "trailing-comma": false,
     "no-unused-expression": false,
     "max-classes-per-file": false,
     "no-console": false,

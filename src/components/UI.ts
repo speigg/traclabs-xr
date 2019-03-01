@@ -15,11 +15,12 @@ export default class UI {
 
     augmentations: {[name: string]: THREE.Object3D} = {}
 
-    // instructionPanelRoot = new THREE.Object3D
-    instructionPanel = new WebLayer3D(new InstructionPanel({
+    instructionPanelVue = new InstructionPanel({
         data: this.app.pride,
-    }), {
-        windowWidth: 300, pixelRatio: 3, layerSeparation: 0.01,
+    }).$mount()
+
+    instructionPanel = new WebLayer3D( this.instructionPanelVue.$el, {
+        windowWidth: 300, pixelRatio: 3, layerSeparation: 0.001,
     })
 
     // doneButton = new HTMLElement3D('')
@@ -95,10 +96,9 @@ export default class UI {
         const fovs = this.app.cameraMetrics.getFovs()
 
         // if (this.app.cameraMetrics.getVisualSizeOf(this.treadmill)) {
-            
         // }
 
-        this.instructionPanel.setToDOMLayout(true)
+        this.instructionPanel.update(event.deltaTime * 10)
         this.app.cameraMetrics.setPositionFor(
             this.instructionPanel,
             new VisualDirection(0, 0),

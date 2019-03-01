@@ -1,30 +1,24 @@
 import * as THREE from 'three/src/Three'
 import html2canvas from 'html2canvas'
-import ResizeObserverPolyfill from '@juggle/resize-observer'
-const ResizeObserver: typeof ResizeObserverPolyfill = (window as any).ResizeObserver || ResizeObserverPolyfill
-
-
+import ResizeObserver from 'resize-observer-polyfill'
 import {NodeParser} from 'html2canvas/dist/npm/NodeParser'
 import Logger from 'html2canvas/dist/npm/Logger'
 import CanvasRenderer from 'html2canvas/dist/npm/renderer/CanvasRenderer'
 import Renderer from 'html2canvas/dist/npm/Renderer'
 import ResourceLoader from 'html2canvas/dist/npm/ResourceLoader'
 import {FontMetrics} from 'html2canvas/dist/npm/Font'
-import { MeshBasicMaterial } from 'three/src/Three';
-// import {TRANSPARENT} from 'html2canvas/dist/npm/Color'
+import { MeshBasicMaterial } from 'three/src/Three'
 
 function ensureElementIsInDocument(element: Element, options: WebLayer3DOptions): Element {
     const document = element.ownerDocument!
     if (document.contains(element)) { return element }
 
     const container = document.createElement('div')
-    container.style.position = 'absolute'
+    container.setAttribute(WebLayer3D.LAYER_CONTAINER_ATTRIBUTE, '')
     container.style.width = 'windowWidth' in options ?
         options.windowWidth + 'px' : '300px'
     container.style.height = 'windowHeight' in options ?
         options.windowHeight + 'px' : '150px'
-    container.style.pointerEvents = 'none'
-    container.style.top = '0'
     container.style.visibility = 'hidden'
 
     container.appendChild(element)
@@ -81,6 +75,7 @@ export interface WebLayer3DOptions {
 export default class WebLayer3D extends THREE.Object3D {
 
     static LAYER_ATTRIBUTE = 'data-layer'
+    static LAYER_CONTAINER_ATTRIBUTE = 'data-layer-container'
     static PIXEL_RATIO_ATTRIBUTE = 'data-layer-pixel-ratio'
     static STATES_ATTRIBUTE = 'data-layer-states'
 
@@ -92,6 +87,8 @@ export default class WebLayer3D extends THREE.Object3D {
         layer.transitionLayout(alpha)
         layer.transitionEntryExit(alpha)
     }
+
+    private static cssAdded = false
 
     element: HTMLElement
     content = new THREE.Object3D
@@ -114,7 +111,7 @@ export default class WebLayer3D extends THREE.Object3D {
     private _states!: string[]
     private _pixelRatio = 1
     private _currentState = 'default'
-    private _resizeObserver: ResizeObserverPolyfill
+    private _resizeObserver: ResizeObserver
 
     // the following properties are only set on the root layer
     private _mutationObserver?: MutationObserver
@@ -128,6 +125,19 @@ export default class WebLayer3D extends THREE.Object3D {
                 public rootLayer: WebLayer3D = undefined as any,
                 public level = 0) {
         super()
+
+        if (!WebLayer3D.cssAdded) {
+            const style = document.createElement('style')
+            document.head.appendChild(style)
+            const sheet = style.sheet! as CSSStyleSheet
+            sheet.insertRule(`[${WebLayer3D.LAYER_CONTAINER_ATTRIBUTE}] {
+                position: absolute;
+                pointer-events: none;
+                top: 0;
+            }`, 0)
+            WebLayer3D.cssAdded = true
+        }
+
         this.element = element as HTMLElement
         this.element.setAttribute(WebLayer3D.LAYER_ATTRIBUTE, this.id.toString())
         this.rootLayer = rootLayer || this

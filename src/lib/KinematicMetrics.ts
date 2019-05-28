@@ -1,4 +1,4 @@
-import * as THREE from 'three/src/Three'
+import * as THREE from 'three'
 
 const EMA_PERIOD = 5
 
@@ -119,7 +119,7 @@ function angleTo(q1: THREE.Quaternion, q2: THREE.Quaternion) {
 }
 
 
-declare module 'three/src/Three' {
+declare module 'three/src/math/Quaternion' {
     interface Quaternion {
         _w: number; _x: number; _y: number; _z: number
         slerpUnclamped(q: Quaternion, t: number): Quaternion

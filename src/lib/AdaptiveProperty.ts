@@ -42,9 +42,9 @@ export default class AdaptiveProperty<T> {
             }
         }
 
-        is(stateMap: AdaptivePropertyStateMap<U>) {
+        is(stateMap: AdaptivePropertyStateMap<U>) { 
             for (const key in stateMap) {
-                const property: AdaptiveProperty<unknown> = (this.object as any)[key]
+                const property: AdaptiveProperty<U> = (this.object as any)[key]
                 if (!property.is((stateMap as any)[key])) { return false }
             }
             return true
@@ -53,7 +53,7 @@ export default class AdaptiveProperty<T> {
         changingTo(stateMap: AdaptivePropertyStateMap<U>) {
             let isNewState = false
             for (const key in stateMap) {
-                const property: AdaptiveProperty<unknown> = (this.object as any)[key]
+                const property: AdaptiveProperty<U> = (this.object as any)[key]
                 const state = (stateMap as any)[key]
                 if (!property.is(state)) { return false }
                 if (property.changing()) { isNewState = true }
@@ -64,7 +64,7 @@ export default class AdaptiveProperty<T> {
         changingFrom(stateMap: AdaptivePropertyStateMap<U>) {
             let isNewState = false
             for (const key in stateMap) {
-                const property: AdaptiveProperty<unknown> = (this.object as any)[key]
+                const property: AdaptiveProperty<U> = (this.object as any)[key]
                 const state = (stateMap as any)[key]
                 if (!property.was(state)) { return false }
                 if (property.changing()) { isNewState = true }
@@ -154,23 +154,23 @@ export default class AdaptiveProperty<T> {
         }
     }
 
-    is(state: string) {
+    is(state: keyof T) {
         this._verifyState()
         return this._currentZone && this._currentZone.state === state
     }
 
-    was(state: string) {
+    was(state: keyof T) {
         this._verifyState()
         return this._previousZone && this._previousZone.state === state
     }
 
-    changingFrom(state: string) {
+    changingFrom(state: keyof T) {
         this._verifyState()
         if (this._previousZone === this._currentZone) { return false }
         return this._previousZone && this._previousZone.state === state
     }
 
-    changingTo(state: string) {
+    changingTo(state: keyof T) {
         this._verifyState()
         if (this._previousZone === this._currentZone) { return false }
         return this._currentZone && this._currentZone.state === state

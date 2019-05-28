@@ -1,11 +1,13 @@
-import * as THREE from 'three/src/Three'
+import * as THREE from 'three'
 import * as CANNON from 'cannon'
 import CreateSTLLoader from 'three-stl-loader'
 const STLLoader: typeof THREE.BufferGeometryLoader = CreateSTLLoader({...THREE})
 
 import App from '../App'
 import AdaptiveProperty from '../lib/AdaptiveProperty'
-import SpatialMetrics from '../lib/SpatialMetrics'
+import {SpatialMetrics} from '../lib/SpatialMetrics'
+import {quaternions} from '../lib/SpatialUtils'
+import {SpatialLayout} from '../lib/SpatialLayout'
 import KinematicMetrics from '../lib/KinematicMetrics'
 import {makeTextSprite} from '../lib/label-utils'
 // import { Line, Scene } from 'three';
@@ -22,8 +24,9 @@ export default class Treadmill {
     snubberObject = new THREE.Object3D
     grid = new THREE.GridHelper( 1, 10 )
 
+    cameraMetrics = SpatialMetrics.get(this.app.camera)
     annotationViewpoint = new THREE.Camera
-    annotationViewpointMetrics = new SpatialMetrics(this.annotationViewpoint)
+    annotationViewpointMetrics = SpatialMetrics.get(this.annotationViewpoint)
     cameraTargetKinematics = new KinematicMetrics(this.app.camera, this.snubberObject)
 
     lineMaterial = new THREE.LineBasicMaterial({
@@ -34,6 +37,10 @@ export default class Treadmill {
     _scratchMatrix = new THREE.Matrix4
 
     annotations: Annotation[] = [
+        {
+            text: 'TEST',
+            anchorPoint: [0,0,0],
+        },
         {
             text: 'Part A',
             anchorPoint: [-0.18, 0.06, 0.09],
@@ -72,7 +79,7 @@ export default class Treadmill {
     }> = new Map
 
     facing = new AdaptiveProperty({
-        metric: () => this.app.cameraMetrics.getVisualOffsetOf(this.snubberObject),
+        metric: () => this.cameraMetrics.getVisualOffsetOf(this.snubberObject),
         zones: [
             {state: 'true', threshold: 12, delay: 100},
             60,
@@ -81,7 +88,7 @@ export default class Treadmill {
     })
 
     visualSize = new AdaptiveProperty({
-        metric: () => this.app.cameraMetrics.getVisualSizeOf(this.snubberObject),
+        metric: () => this.cameraMetrics.getVisualFrustumOf(this.snubberObject).diagonal,
         zones: [
             {state: 'small', threshold: 20, delay: 100},
             20,
@@ -120,7 +127,7 @@ export default class Treadmill {
 
     state = new AdaptiveProperty.CompositeState<Treadmill>(this)
 
-    treadmillObject?: THREE.Object3D
+    treadmillObject = new THREE.Object3D
 
     stlLoader = new STLLoader() as THREE.BufferGeometryLoader
     snubberMeshPromise: Promise<THREE.Mesh>
@@ -141,6 +148,10 @@ export default class Treadmill {
     constructor(public app: App) {
         this.annotationViewpoint.position.set(0, 0, 2)
         this.snubberObject.add(this.annotationViewpoint)
+
+        this.treadmillObject.name = 'treadmill'
+        this.snubberObject.name = 'snubber'
+        this.annotationViewpoint.name = 'annotationViewpoint'
 
         // this.grid.rotateX(Math.PI / 2)
         // this.snubberObject.add(this.grid)
@@ -169,6 +180,8 @@ export default class Treadmill {
 
             this.snubberObject.add(anchorObject)
             this.snubberObject.add(annotationObject)
+            anchorObject.layoutIgnore = true
+            annotationObject.layoutIgnore = true
 
             const canvas = (contentObject.material as any).map.image
             const anchorBody = new CANNON.Body({
@@ -228,11 +241,15 @@ export default class Treadmill {
         const vuforia = event.vuforia
 
         if (!vuforia) {
-            this.app.scene.add(this.snubberObject)
-            const visualDirection = new SpatialMetrics.VisualDirection(0, 0)
-            const visualSize = 60
+            this.app.scene.add(this.treadmillObject)
+            this.app.camera.add(this.snubberObject)
+            this.snubberObject.layout = new SpatialLayout()
+            this.snubberObject.layout.align.set(1,0,-2)
+            this.snubberObject.layout.origin.set(1,0,1)
             await this.snubberMeshPromise
-            this.app.cameraMetrics.setPositionFor(this.snubberObject, visualDirection, visualSize)
+            // const visualDirection = new THREE.Vector2
+            // const visualSize = 60
+            // this.cameraMetrics.setPositionFor(this.snubberObject, visualDirection, visualSize)
             return
         }
         // const dataSetId = await vuforia.fetchDataSet('/resources/Treadmill.xml')
@@ -242,8 +259,8 @@ export default class Treadmill {
         const trackables = await vuforia.loadDataSet(dataSetId)
 
         const treadmillAnchor = trackables.get('treadmill')
-        this.treadmillObject = this.app.getXRObject3D(treadmillAnchor)!
-        this.treadmillObject.add(this.snubberObject)
+        this.app.getXRObject3D(treadmillAnchor)!.add(this.treadmillObject)
+        
 
         // Add a box to the trackable image
         const imageSize = treadmillAnchor.size
@@ -255,7 +272,13 @@ export default class Treadmill {
                 transparent: true,
             }),
         )
-        this.treadmillObject.add(box)
+        // this.treadmillObject.add(box)
+
+        const treadmillImage = new THREE.Object3D
+        treadmillImage.add(this.snubberObject)
+        treadmillImage.scale.setScalar(imageSize.y / 2)
+        this.treadmillObject.add(treadmillImage)
+        treadmillImage.add(this.snubberObject)
 
         this.snubberObject.position.set(0.33, -0.92, 0.18)
 
@@ -314,9 +337,12 @@ export default class Treadmill {
     updateAnnotations(deltaTime: number) {
         // this.physicsWorld.step(1/60, deltaTime, 5)
         this.physicsWorld.step(deltaTime * 2)
-        this.snubberObject.updateMatrixWorld(false)
-        const cameraWorldPosition = this.app.camera.getWorldPosition(this._cameraWorldPosition)
+        // this.snubberObject.updateMatrixWorld(false)
+        // const cameraWorldPosition = this.app.camera.getWorldPosition(this._cameraWorldPosition)
 
+        const annotationOrientation = SpatialMetrics.get(this.snubberObject).getOrientationOf(this.annotationViewpoint, quaternions.get())
+
+        let first = true
         for (const annotation of this.annotations) {
             const state = this.annotationState.get(annotation)!
             const body = state.annotationBody
@@ -326,12 +352,17 @@ export default class Treadmill {
             const annotationObject = state.annotationObject
             annotationObject.position.copy( body.position as any)
             // annotationObject.quaternion.copy( body.quaternion as any)
-            annotationObject.updateMatrixWorld(false)
+            annotationObject.quaternion.copy( annotationOrientation )
+            annotationObject.updateMatrixWorld(true)
             // annotationObject.scale.setScalar(0.3)
             // annotationObject.updateMatrix()
             // annotationObject.applyMatrix(this.object.matrixWorld)
-            annotationObject.lookAt(cameraWorldPosition)
+            // annotationObject.lookAt(cameraWorldPosition)
             // this.annotationViewpointMetrics.setOrientationFor(annotationObject)
+            // this.annotation
+
+            if (first) annotationObject.visible = false
+            first = false
 
             // update line
             const line = state.line
@@ -403,6 +434,8 @@ export default class Treadmill {
             }
 
         }
+
+        quaternions.pool(annotationOrientation)
 
     }
 

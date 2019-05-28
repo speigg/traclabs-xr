@@ -1,27 +1,42 @@
-import * as THREE from 'three/src/Three'
+import * as THREE from 'three'
 
 import App, {UpdateEvent} from '@/App'
-import WebLayer3D from '@/lib/WebLayer3D'
+import Pride from '../lib/PRIDEClient'
+import WebLayer3D from 'three-web-layer'
 import Treadmill from './Treadmill'
 import InstructionPanel from './InstructionPanel.vue'
-import { VisualDirection } from '@/lib/SpatialMetrics'
-import AdaptiveProperty from '@/lib/AdaptiveProperty';
-
-const ZERO = new THREE.Vector3
-const IDENTITY = new THREE.Quaternion
-const vec3 = new THREE.Vector3
+import {Q_IDENTITY} from '@/lib/SpatialUtils'
+import {SpatialMetrics} from '@/lib/SpatialMetrics'
+import {SpatialLayout} from '@/lib/SpatialLayout'
+import {SpatialTransitioner} from '@/lib/SpatialTransitioner'
+// import {SpatialPlacement, CameraSurface} from '@/lib/SpatialPlacement'
+import AdaptiveProperty from '@/lib/AdaptiveProperty'
 
 export default class UI {
 
     augmentations: {[name: string]: THREE.Object3D} = {}
 
     instructionPanelVue = new InstructionPanel({
-        data: this.app.pride,
+        data: this.pride.data,
     }).$mount()
 
     instructionPanel = new WebLayer3D( this.instructionPanelVue.$el, {
         windowWidth: 300, pixelRatio: 3, layerSeparation: 0.001,
     })
+
+    instructionPanelTransitioner = new SpatialTransitioner(this.instructionPanel)
+    // procedureTransitioner = new SpatialTransitioner(this.instructionPanel.getObjectByName('procedure')!)
+
+    snubberVisualSize = new AdaptiveProperty({
+        metric: () => SpatialMetrics.get(this.app.camera).getVisualFrustumOf(this.treadmill.snubberObject!).diagonal,
+        zones: [
+            {state: 'small', threshold: 15, delay: 100},
+            40,
+            {state: 'large', threshold: 15, delay: 100},
+        ],
+    })
+
+    box = new THREE.BoxHelper(this.instructionPanel)
 
     // doneButton = new HTMLElement3D('')
     // skipButton = new HTMLElement3D('')
@@ -31,23 +46,19 @@ export default class UI {
     // noButton = new HTMLElement3D('')
     // commentButton = new HTMLElement3D('')
 
-    constructor(public app: App, public treadmill: Treadmill) {
+    constructor(private app: App, private pride:Pride, private treadmill: Treadmill) {
 
-        setInterval(() => app.pride.get(), 5000)
+        setInterval(() => this.pride.get(), 5000)
+        this.treadmill.snubberObject.add(this.instructionPanel)
 
-        // app.camera.add(this.procedureTitle.screenAnchor)
-        // snubber.object.add(this.procedureTitle.worldAnchor)
-        // snubber.object.add(this.instructionPanel)
-
-        app.scene.add(this.instructionPanel)
-        // this.instructionPanelRoot.add(this.instructionPanel)
-        // this.instructionPanel.position.z = 0.2
+        // Argon quirk (tofix): move outside of body so it is visible in XR mode
+        document.documentElement.appendChild(this.instructionPanelVue.$el.parentElement!)
 
         this.prepare()
     }
 
     async prepare() {
-        const result = await this.app.pride.get()
+        const result = await this.pride.get()
         // const steplist = result.procedureElementInfo.steplist
         // this.instructionPanel.vue.step = steplist[steplist.length - 1].title
         // this.instructionPanel.vue.instruction = result.text
@@ -55,7 +66,7 @@ export default class UI {
 
     update(event: UpdateEvent) {
 
-        const prideObjects = this.app.pride.objects
+        const prideObjects = this.pride.data.objects
         for (const name in prideObjects) {
             const prideObject = prideObjects[name]
             let augmentation = this.augmentations[name]
@@ -93,20 +104,50 @@ export default class UI {
         //     }
         // }
 
-        const fovs = this.app.cameraMetrics.getFovs()
-
+        // this.pride.data.instruction = JSON.stringify(fovs, null, '\n')
         // if (this.app.cameraMetrics.getVisualSizeOf(this.treadmill)) {
         // }
 
-        this.instructionPanel.update(event.deltaTime * 10)
-        this.app.cameraMetrics.setPositionFor(
-            this.instructionPanel,
-            new VisualDirection(0, 0),
-            fovs.left + fovs.right,
-        )
-        this.app.cameraMetrics.setOrientationFor(
-            this.instructionPanel,
-        )
+        const lerpFactor = THREE.Math.clamp(event.deltaTime * 8, 0, 1)
+
+
+        this.snubberVisualSize.update(lerpFactor)
+
+        this.instructionPanel.update(lerpFactor)
+        this.instructionPanelTransitioner.update(lerpFactor)
+
+        // const cameraFrustum = SpatialMetrics.get(this.app.camera).getVisualFrustum()
+        // const {horizontal, vertical} = cameraFrustum
+        // this.pride.data.instruction = JSON.stringify({horizontal,vertical},null,' ')
+
+        // const videoLayer = this.instructionPanel.getObjectByName('video') as WebLayer3D
+        // if (videoLayer) {
+        //     const videoEl = (videoLayer.element as HTMLVideoElement)
+        //     // if (videoEl.paused) videoEl.play()
+        // }
+
+        // if (this.snubberVisualSize.is('large')) {
+
+        //     SpatialLayout.setParent(this.instructionPanel, this.app.camera)
+        //     this.instructionPanel.position.lerp(vec.set(0,0,0), lerpFactor)
+        //     this.instructionPanel.quaternion.slerp(Q_IDENTITY, lerpFactor)
+        //     this.instructionPanel.layout!.align.lerp(vec.set(-1,0,-0.5), lerpFactor)
+        //     this.instructionPanel.layout!.origin.lerp(vec.set(-1,0,-1), lerpFactor)
+    
+        // } else {
+        //     // if far, attach UI to world
+        //     SpatialLayout.setParent(this.instructionPanel, this.treadmill.treadmillObject)
+        //     this.instructionPanel.position.lerp(vec.set(0,0,0), lerpFactor)
+        //     this.instructionPanel.quaternion.slerp(Q_IDENTITY, lerpFactor)
+        // }
+
+        // SpatialUtils.vectors.pool(offset)
+
+
+        // this.app.cameraMetrics.setOrientationFor(
+        //     this.instructionPanel,
+        // )
+        // this.instructionPanel.lookAt(this.app.camera.getWorldPosition(new THREE.Vector3))
         // this.app.camera.getWorldPosition(_vec3)
         // this.snubber.object.getWorldPosition(vec3)
         // this.instructionPanel.position.copy(vec3)
@@ -115,51 +156,28 @@ export default class UI {
         // layoutElement(this.app.scene, this.procedureTitle, event.deltaTime)
     }
 
-    // updateElements() {
-    //     const fovs = this.app.cameraFovs
-    //     const facingSnubber = this.snubber.facing.is('true')
-    //     if (facingSnubber) {
-    //         this.procedureTitle.mode = 'world'
-    //     } else {
-    //         this.procedureTitle.mode = 'screen'
-    //         this.app.cameraMetrics.computePositionFor(
-    //             this.procedureTitle.object,
-    //             this.procedureTitle.screenAnchor.position,
-    //             fovs.left, fovs.top, fovs.right - fovs.left
-    //         )
-    //     }
-    // }
-
     // proceedToNextStep(step) {
     //     this.procedureTitle.object = replaceObject(
     //         this.procedureTitle.object,
     //         makeTextSprite(step.procedureTitle, {})
     //     )
     // }
+
+    attachToScreen() {
+        this.instructionPanelTransitioner.parent = this.app.camera
+        this.instructionPanelTransitioner.position.set(0,0,0)
+        this.instructionPanelTransitioner.quaternion.copy(Q_IDENTITY)
+        this.instructionPanelTransitioner.scale.set(1,1,1)
+        this.instructionPanelTransitioner.align.set(-1,0,-0.5)
+        this.instructionPanelTransitioner.origin.set(-1,0,-1)
+    }
+
+    attachToWorld() {
+        this.instructionPanelTransitioner.parent = this.treadmill.snubberObject
+        this.instructionPanelTransitioner.position.set(0,0,0)
+        this.instructionPanelTransitioner.quaternion.copy(Q_IDENTITY)
+        this.instructionPanelTransitioner.scale.set(1,1,1)
+        this.instructionPanelTransitioner.align.set(-1,0,1.5)
+        this.instructionPanelTransitioner.origin.set(1,0,0)
+    }
 }
-
-// function screenToCamera() {}
-
-// function layoutElement(scene:THREE.Scene, element:HTMLElement3D, deltaTime:number) {
-//     const anchor = getElementAnchor(element)
-//     ensureObjectPlacement(this.app.scene, element.object, anchor)
-//     const alpha = element.modeTransitionSpeedFactor * deltaTime
-//     element.object.position.lerp(ZERO, alpha)
-//     element.object.quaternion.slerp(IDENTITY, alpha)
-// }
-
-function replaceObject<T extends THREE.Object3D>(a: THREE.Object3D, b: T): T {
-    a.parent!.add(b)
-    a.parent!.remove(a)
-    return b
-}
-
-function ensureObjectPlacement(scene: THREE.Scene, object: THREE.Object3D, parent: THREE.Object3D) {
-    if (object.parent === parent) { return }
-    THREE.SceneUtils.detach(object, object.parent!, scene)
-    THREE.SceneUtils.attach(object, scene, parent)
-}
-
-// function getElementAnchor(element:Element) {
-//     return element.anchor === 'world' ? element.worldAnchor : element.screenAnchor
-// }

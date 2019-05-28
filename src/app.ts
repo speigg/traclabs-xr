@@ -1,8 +1,6 @@
 
-import * as THREE from 'three/src/Three'
-import SpatialMetrics from './lib/SpatialMetrics'
+import * as THREE from 'three'
 import store from './store'
-import PRIDEClient from './lib/PRIDEClient'
 
 export interface UpdateEvent {
     type: 'update'
@@ -13,7 +11,7 @@ export interface UpdateEvent {
 }
 
 export interface AppStartConfig {
-    onUpdate(event: UpdateEvent): void
+    onUpdate: (event: UpdateEvent) => void
 }
 
 export default class App {
@@ -21,7 +19,7 @@ export default class App {
     store = store
     scene = new THREE.Scene
     camera = new THREE.PerspectiveCamera
-    cameraMetrics = new SpatialMetrics(this.camera)
+
     renderer = new THREE.WebGLRenderer({
         antialias: false,
         alpha: true,
@@ -34,8 +32,9 @@ export default class App {
 
     private _startConfig?: AppStartConfig
 
-    constructor(public pride: PRIDEClient) {
+    constructor() {
         this.scene.add(this.camera)
+        this.scene.layoutReferenceFrame = this.camera
         this.renderer.vr.enabled = false // manage xr setup manually for now
 
         // this.renderer.setAnimationLoop(this.onAnimate)
@@ -96,7 +95,10 @@ export default class App {
 
         if (devicePose) {
             // update camera
-            this.camera.matrix.fromArray(devicePose.poseModelMatrix)
+            // this.camera.matrix.fromArray(devicePose.poseModelMatrix)
+            // this.camera.updateMatrixWorld(true)
+            const viewMatrix = devicePose.getViewMatrix(frame.views[0])
+            this.camera.matrix.fromArray(viewMatrix).getInverse(this.camera.matrix)
             this.camera.updateMatrixWorld(true)
             // if (frame.views.length === 1) {
             this.camera.projectionMatrix.fromArray(frame.views[0].projectionMatrix)
@@ -125,6 +127,14 @@ export default class App {
                     }
                 }
             }
+        } else if (!frame) {
+            const width = window.innerWidth
+            const height = window.innerHeight
+            const aspect = width / height
+            this.camera.aspect = aspect
+            this.camera.near = 0.001
+            this.camera.far = 100000
+            this.camera.updateProjectionMatrix()
         }
 
         // emit update event
@@ -139,13 +149,9 @@ export default class App {
         if (!frame) {
             const width = window.innerWidth
             const height = window.innerHeight
-            const aspect = width / height
-            this.camera.aspect = aspect
-            this.camera.near = 0.001
-            this.camera.far = 100000
-            this.camera.updateProjectionMatrix()
             this.renderer.autoClear = false
             this.renderer.setSize(width, height)
+            this.renderer.setPixelRatio(window.devicePixelRatio)
             this.renderer.render(this.scene, this.camera)
             return
         }
@@ -155,6 +161,7 @@ export default class App {
         // Prep THREE.js for the render of each XRView
         const baseLayer = frame.session.baseLayer
         this.renderer.autoClear = false
+        this.renderer.setPixelRatio(1)
         this.renderer.setSize(baseLayer.framebufferWidth, baseLayer.framebufferHeight, false)
         this.renderer.clear()
         this.camera.matrixAutoUpdate = false
@@ -190,13 +197,13 @@ declare global {
     const XRWebGLLayer: any
 }
 
-declare module 'three/src/Three' {
-    interface WebVRManager {
-        setFrameOfReferenceType(type: string): void
-        setSession(session: any): void
-        getSession(): any
-    }
-}
+// declare module 'three' {
+//     interface WebVRManager {
+//         setFrameOfReferenceType(type: string): void
+//         setSession(session: any): void
+//         getSession(): any
+//     }
+// }
 
 const VUFORIA_LICENSE_DATA =
 `-----BEGIN PGP MESSAGE-----

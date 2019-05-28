@@ -1,3 +1,4 @@
+import App from '../app'
 
 const MOCK_PROCEDURES = {
 
@@ -51,13 +52,17 @@ interface HighlightAugmentation extends Augmentation {
 export default class PRIDE {
 
     static TREADMILL_PROCEDURE_NAME = 'T2_Monthly_Maintenance_Top_Level'
-
-    procedure = 'Treadmill Monthly Maintenance'
-    step = ''
-    instruction = ''
-    objects: {[name: string]: LabelAugmentation|BoxAugmentation|SphereAugmentation|HighlightAugmentation} = {}
-
-    constructor() {
+    
+    data = {
+        procedure: 'Treadmill Monthly Maintenance',
+        step: '',
+        instruction: 'test',
+        image: '',
+        video: '/armWiggleDemonstrated.mov',
+        // video: 'https://prideview-ar.traclabs.com/a7e79a1a-acff-43df-a1dc-f12f6bfcd6c9/4529_T2_Monthly_Maintenance_Top_Level_files/armWiggleDemonstrated.mov',
+        objects: {} as {[name: string]: LabelAugmentation|BoxAugmentation|SphereAugmentation|HighlightAugmentation}
+    }
+    constructor(private app:App) {
         setTimeout(() => {
             this.get()
         }, 5000)
@@ -72,17 +77,18 @@ export default class PRIDE {
     // }
 
     async get() {
-        const response = await fetch(BASE_URL + 'ARready', {mode: 'cors'})
-        const json = await response.json()
-        const steplist = json.procedureElementInfo.steplist
-        this.step = steplist[steplist.length - 1].title
-        this.instruction = json.text
+        const response = await fetch(BASE_URL + 'ARready', {mode: 'cors'}).catch()
+        const json = await response.json().catch()
+        const steplist = json && json.procedureElementInfo.steplist
+        if (!steplist) return // sometimes this is missing after going back. 
+        this.data.step = steplist[steplist.length - 1].title
+        this.data.instruction = json.text
         const objectKeys = Object.keys(json).filter((key) => key.toLowerCase().includes('object'))
         for (const key of objectKeys) {
             const jsonObject = json[key]
             const realityAugmentation = jsonObject.properties.realityaugmentation as string
             if (!realityAugmentation) { continue }
-            const object = this.objects[jsonObject.name] = {} as any
+            const object = this.data.objects[jsonObject.name] = {} as any
             const augmentationProperties = realityAugmentation.split(';')
             for (const prop of augmentationProperties) {
                 if (!prop) { continue }

@@ -1,22 +1,26 @@
-import App from './App'
+import AppBase from './app'
 import Treadmill from './components/Treadmill'
 import UI from './components/UI'
-// import * as THREE from 'three/src/Three'
 import PRIDEClient from './lib/PRIDEClient'
 
-// (window as any).THREE = THREE
-const app = (window as any).app = new App(new PRIDEClient)
-const treadmill = (window as any).treadmill = new Treadmill(app)
-const ui = (window as any).ui = new UI(app, treadmill)
+class App extends AppBase {
+    pride = new PRIDEClient(this)
+    treadmill = new Treadmill(this)
+    ui = new UI(this, this.pride, this.treadmill)
+}
 
+const app = (window as any).app = new App()
 app.start({
-    onUpdate(event) {
-        treadmill.update(event)
-        ui.update(event)
+    onUpdate: (event) => {
+        app.treadmill.update(event)
+        app.ui.update(event)
     },
 }).then((startEvent) => {
-    treadmill.start(startEvent)
+    app.treadmill.start(startEvent)
 }).catch((e: Error) => {
     console.error(e)
     alert(e)
 })
+
+import * as THREE from 'three'
+(window as any).THREE = THREE

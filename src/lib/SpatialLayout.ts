@@ -1,153 +1,132 @@
 import * as THREE from 'three'
-import {matrices, vectors, V_000} from './SpatialUtils'
-import {SpatialMetrics, VisualFrustum} from './SpatialMetrics'
+import {matrices, vectors} from './SpatialUtils'
+import {SpatialMetrics} from './SpatialMetrics'
+import {SpatialTransformer} from './SpatialTransitioner'
 
 declare module 'three/src/core/Object3D' {
     interface Object3D {
         layout?: SpatialLayout
         layoutIgnore?: boolean
-        layoutReferenceFrame?: THREE.Object3D|null
     }
 }
 
-const childReferenceFrames = new Set<THREE.Object3D>()
+const neededReferenceFrames = new Set<THREE.Object3D|null>()
 const originalUpdateMatrix = THREE.Object3D.prototype.updateMatrix
 THREE.Object3D.prototype.updateMatrix = function() {
     originalUpdateMatrix.call(this)
     const o = this
-    let referenceFrame: THREE.Object3D|null|undefined
 
     // determine needed layout bounds
     let needsBoundsUpdate = !!o.layout
-    if (needsBoundsUpdate) referenceFrame = SpatialLayout.resolveReferenceFrame(o)
     for (const child of this.children) {
         if (child.layout) {
             needsBoundsUpdate = true
-            if (referenceFrame === undefined) referenceFrame = SpatialLayout.resolveReferenceFrame(o)
-            const childFrame = SpatialLayout.resolveReferenceFrame(child, referenceFrame)
-            childFrame && childReferenceFrames.add(childFrame)
+            neededReferenceFrames.add(SpatialLayout.getReferenceFrame(child) || o)
         }
     }
     if (!needsBoundsUpdate) return
 
-    // update bounds && frustums
-    SpatialMetrics.get(o).getBoundsOf(o, SpatialLayout.getBounds(o))
-    if (referenceFrame) SpatialMetrics.get(referenceFrame).getVisualFrustumOf(o, SpatialLayout.getFrustum(o, referenceFrame))
-    for (const childFrame of childReferenceFrames) {
-        SpatialMetrics.get(childFrame).getVisualFrustumOf(o, SpatialLayout.getFrustum(o, childFrame))
+    // update bounds
+    const referenceFrame = SpatialLayout.getReferenceFrame(o)
+    neededReferenceFrames.add(referenceFrame)
+    for (const frame of neededReferenceFrames) {
+        SpatialMetrics.get(frame||o).getBoundsOf(o, SpatialLayout.getBounds(o, frame))
     }
-    childReferenceFrames.clear()
+    neededReferenceFrames.clear()
 
     // update layout
-    if (o.layout) {
-        // update align & origin
-        SpatialLayout.getPositionForOffset(o.parent, referenceFrame, o.layout.align, o.layout.computedAlignTranslate)
-        SpatialLayout.getPositionForOffset(o, referenceFrame, o.layout.origin, o.layout.computedOriginTranslate)
-        o.layout.computedOriginTranslate.negate()
+    const layout = o.layout
+    if (layout) {
+        layout.computedParentBounds = o.parent ? SpatialLayout.getBounds(o.parent, referenceFrame) : null
+        layout.computedBounds = SpatialLayout.getBounds(o, referenceFrame)
+        // update computed size
+        const sizeScale = SpatialLayout.getScaleForSize(o, referenceFrame, layout.size, layout.computedSizeScale)
+        const scale = vectors.get().copy(o.scale).multiply(sizeScale)
+        // update computed align & origin
+        const alignPosition = SpatialLayout.getPositionForOffset(o.parent, referenceFrame, layout.align, layout.computedAlignPosition)
+        const originPosition = SpatialLayout.getPositionForOffset(o, referenceFrame, layout.origin, layout.computedOriginPosition)
+        originPosition.negate().multiply(scale)
         // update matrix
-        if (isFinite(o.layout.computedAlignTranslate.x) && isFinite(o.layout.computedOriginTranslate.x)) {
-            const translate = vectors.get()
-            const translateMatrix = matrices.get()
-            translate.addVectors(o.layout.computedAlignTranslate, o.layout.computedOriginTranslate)
-            translateMatrix.setPosition(translate)
-            o.matrix.multiply(translateMatrix)
-            vectors.pool(translate)
-            matrices.pool(translateMatrix)
-        }
+        const translate = vectors.get().copy(o.position).add(alignPosition).add(originPosition)
+        o.matrix.compose(translate, o.quaternion, scale)
+        vectors.pool(translate, scale)
     }
 }
 
 export class SpatialLayout {
 
-    align = new THREE.Vector3(0,0,0)
-    origin = new THREE.Vector3(0,0,0)
-    computedAlignTranslate = new THREE.Vector3(0,0,0)
-    computedOriginTranslate = new THREE.Vector3(0,0,0)
+    align = new THREE.Vector3().set(NaN,NaN,NaN)
+    origin = new THREE.Vector3().set(NaN,NaN,NaN)
+    size = new THREE.Vector3().set(NaN,NaN,NaN)
+    computedAlignPosition = new THREE.Vector3(0,0,0)
+    computedOriginPosition = new THREE.Vector3(0,0,0)
+    computedSizeScale = new THREE.Vector3(1,1,1)
+    referenceFrame: THREE.Object3D|null = null
 
-    constructor(config?:{align?:THREE.Vector3,origin?:THREE.Vector3}) {
+    computedBounds = new THREE.Box3
+    computedParentBounds = new THREE.Box3 as THREE.Box3 | null
+    
+    private _transformer?: SpatialTransformer
+
+    constructor(config?:{align?:THREE.Vector3,origin?:THREE.Vector3,size?:THREE.Vector3}) {
         if (config) {
             if (config.align) this.align = config.align
             if (config.origin) this.origin = config.origin
+            if (config.size) this.size = config.size
         }
     }
 
-    public static bounds = new WeakMap<THREE.Object3D, THREE.Box3>()
+    public static bounds = new WeakMap<THREE.Object3D, WeakMap<THREE.Object3D, THREE.Box3>>()
 
-    public static getBounds(o:THREE.Object3D) {
-        if (!this.bounds.has(o)) {
-            const bounds = new THREE.Box3
-            bounds.objectFilter = SpatialLayout.objectFilter
-            this.bounds.set(o, bounds)
+    public static getBounds(o:THREE.Object3D, referenceFrame:THREE.Object3D|null) {
+        if (!referenceFrame) referenceFrame = o
+        if (!this.bounds.has(o)) this.bounds.set(o, new WeakMap)
+        const bounds = this.bounds.get(o)!
+        if (!bounds.has(referenceFrame)) {
+            const box = new THREE.Box3
+            box.objectFilter = SpatialMetrics.objectFilter
+            bounds.set(referenceFrame, box)
         }
-        return this.bounds.get(o)!
+        return bounds.get(referenceFrame)!
     }
 
-    public static frustums = new WeakMap<THREE.Object3D, WeakMap<THREE.Object3D, VisualFrustum>>()
-
-    public static getFrustum(o:THREE.Object3D, referenceFrame=SpatialLayout.resolveReferenceFrame(o)) {
-        if (!referenceFrame) throw new Error('Getting a visual frustum requires a reference frame')
-        if (!this.frustums.has(o)) this.frustums.set(o, new WeakMap)
-        const frustums = this.frustums.get(o)!
-        if (!frustums.has(referenceFrame)) {
-            const frustum = new VisualFrustum
-            frustum.objectFilter = SpatialLayout.objectFilter
-            frustums.set(referenceFrame, frustum)
-        }
-        return frustums.get(referenceFrame)!
+    public static getReferenceFrame(o:THREE.Object3D) {
+        return o.layout ? o.layout.referenceFrame : null
     }
 
-    public static objectFilter = (o:THREE.Object3D) => !o.layout && !o.layoutIgnore
-
-    public static resolveReferenceFrame(o:THREE.Object3D, inherited?:THREE.Object3D|null) {
-        if (inherited !== undefined && o.layoutReferenceFrame === undefined) return inherited
-        let currObject = o as THREE.Object3D|null
-        while (currObject) {
-            if (currObject && currObject.layoutReferenceFrame !== undefined) 
-                return currObject.layoutReferenceFrame
-            currObject = currObject.parent
-        }
-        return null
-    }
-
-    public static getPositionForOffset(o:THREE.Object3D|null, referenceFrame:THREE.Object3D|null|undefined, offset:THREE.Vector3, out:THREE.Vector3) {
+    public static getPositionForOffset(o:THREE.Object3D|null, referenceFrame:THREE.Object3D|null, offset:THREE.Vector3, out:THREE.Vector3) {
         if (!o) return out.setScalar(0)
         const camera = o as THREE.Camera
         if (camera.isCamera) {
-            const boundsMatrix = matrices.get().getInverse(camera.projectionMatrix)
+            const projectionMatrixInverse = matrices.get().getInverse(camera.projectionMatrix)
             const translateZ = -offset.z
             out.copy(offset)
             out.z = -1
-            out.applyMatrix4(boundsMatrix)
+            out.applyMatrix4(projectionMatrixInverse)
             out.normalize().multiplyScalar(translateZ)
-            matrices.pool(boundsMatrix)
-        } else if (referenceFrame) {
-            const frustum = SpatialLayout.getFrustum(o, referenceFrame)
-            if (!frustum.isEmpty()) {
-                const center = frustum.getCenter(vectors.get())
-                const size = frustum.getSize(vectors.get())
-                out.copy(offset).multiplyScalar(0.5).multiply(size).add(center)
-                SpatialMetrics.getCartesianForSphericalPosition(out, out)
-                referenceFrame.localToWorld(out)
-                o.worldToLocal(out)
-                vectors.pool(center, size)
-            } else {
-                out.setScalar(0)
-            }
+            matrices.pool(projectionMatrixInverse)
         } else {
-            const bounds = SpatialLayout.getBounds(o)
+            const bounds = SpatialLayout.getBounds(o, referenceFrame)
             if (!bounds.isEmpty()) {
                 const center = bounds.getCenter(vectors.get())
                 const size = bounds.getSize(vectors.get())
                 out.copy(offset).multiplyScalar(0.5).multiply(size).add(center)
+                if (referenceFrame) {
+                    referenceFrame.localToWorld(out)
+                    o.worldToLocal(out)
+                }
                 vectors.pool(center, size)
             } else {
                 out.setScalar(0)
             }
         }
+        if (!isFinite(out.x)) out.x = 0
+        if (!isFinite(out.y)) out.y = 0
+        if (!isFinite(out.z)) out.z = 0
         return out
     }
 
-    public static getOffsetForPosition(o:THREE.Object3D|null, referenceFrame:THREE.Object3D|null|undefined, position:THREE.Vector3, out:THREE.Vector3) {
+    public static getOffsetForPosition(o:THREE.Object3D|null, referenceFrame:THREE.Object3D|null, position:THREE.Vector3, out:THREE.Vector3) {
         if (!o) return out.setScalar(0)
         const camera = o as THREE.Camera
         if (camera.isCamera) {
@@ -157,36 +136,137 @@ export class SpatialLayout {
             const zTranslate = -position.length()
             out.copy(position).normalize().applyMatrix4(camera.projectionMatrix)
             out.z = zTranslate
-        } else if (referenceFrame) {
-            const frustum = SpatialLayout.getFrustum(o, referenceFrame)
-            if (!frustum.isEmpty()) {  
-                const center = frustum.getCenter(vectors.get())
-                const size = frustum.getSize(vectors.get())
-                o.localToWorld(out.copy(position))
-                referenceFrame.worldToLocal(out)
-                SpatialMetrics.getSphericalPositionForCartesian(out, out)
+        } else {
+            const bounds = SpatialLayout.getBounds(o, referenceFrame)
+            if (!bounds.isEmpty()) {  
+                const center = bounds.getCenter(vectors.get())
+                const size = bounds.getSize(vectors.get())
+                out.copy(position)
+                if (referenceFrame) {
+                    o.localToWorld(out)
+                    referenceFrame.worldToLocal(out)
+                }
                 out.sub(center).divide(size).multiplyScalar(2)
                 vectors.pool(center, size)
             } else {
                 out.setScalar(0)
             }
+        }
+        if (!isFinite(out.x)) out.x = 0
+        if (!isFinite(out.y)) out.y = 0
+        if (!isFinite(out.z)) out.z = 0
+        return out
+    }
+
+    public static getScaleForSize(o:THREE.Object3D, referenceFrame:THREE.Object3D|null, size:THREE.Vector3, out:THREE.Vector3) {
+        const parent = o.parent
+        if (!o || !parent) return out.setScalar(1)
+        const parentBounds = SpatialLayout.getBounds(parent, referenceFrame)
+        if (parentBounds.isEmpty()) return out.setScalar(1)
+        const bounds = SpatialLayout.getBounds(o, referenceFrame)
+        if (bounds.isEmpty()) return out.setScalar(1)
+
+        const boundsSize = bounds.getSize(vectors.get())
+        const camera = o.parent as THREE.Camera
+        if (camera.isCamera) {
+            const position = vectors.get().setFromMatrixPosition(o.matrixWorld)
+            camera.worldToLocal(position)
+            position.applyMatrix4(camera.projectionMatrix)
+            const invProjection = matrices.get().getInverse(camera.projectionMatrix)
+            const left = vectors.get().set(-1, position.y, position.z).applyMatrix4(invProjection)
+            const right = vectors.get().set(1, position.y, position.z).applyMatrix4(invProjection)
+            const top = vectors.get().set(position.x, 1, position.z).applyMatrix4(invProjection)
+            const bottom = vectors.get().set(position.x, -1, position.z).applyMatrix4(invProjection)
+            const near = vectors.get().set(0, 0, -1).applyMatrix4(invProjection)
+            const far = vectors.get().set(0, 0, 1).applyMatrix4(invProjection)
+            const parentSize = position.set(right.distanceTo(left), top.distanceTo(bottom), far.distanceTo(near))
+            out.copy(parentSize).multiply(size).divide(boundsSize)
+            matrices.pool(invProjection)
+            vectors.pool(position, left, right, top, bottom, near, far)
         } else {
-            const bounds = SpatialLayout.getBounds(o)
-            if (!bounds.isEmpty()) {
-                const center = bounds.getCenter(vectors.get())
-                const size = bounds.getSize(vectors.get())
-                out.copy(position).sub(center).divide(size).multiplyScalar(2)
-                vectors.pool(center, size)
+            const parentBounds = SpatialLayout.getBounds(parent, referenceFrame)
+            if (!parentBounds.isEmpty()) {
+                const parentSize = parentBounds.getSize(vectors.get())
+                out.copy(parentSize).multiply(size).divide(boundsSize)
+                if (referenceFrame) {
+                    referenceFrame.localToWorld(out)
+                    o.worldToLocal(out)
+                }
+                vectors.pool(parentSize)
             } else {
-                out.setScalar(0)
+                out.setScalar(1)
             }
         }
+        vectors.pool(boundsSize)
+
+        if (isFinite(out.x)) {
+            if (!isFinite(out.y)) out.y = out.x
+            if (!isFinite(out.z)) out.z = out.x
+        }
+        
+        if (isFinite(out.y)) {
+            if (!isFinite(out.x)) out.x = out.y
+            if (!isFinite(out.z)) out.z = out.y
+        }
+        
+        if (isFinite(out.z)) {
+            if (!isFinite(out.x)) out.x = out.z
+            if (!isFinite(out.y)) out.y = out.z
+        }
+
+        if (!isFinite(out.x) || out.x === 0) out.x = 1
+        if (!isFinite(out.y) || out.y === 0) out.y = 1
+        if (!isFinite(out.z) || out.z === 0) out.z = 1
+        return out
+    }
+
+    public static getSizeForScale(o:THREE.Object3D, referenceFrame:THREE.Object3D|null, scale:THREE.Vector3, out:THREE.Vector3) {
+        const parent = o.parent
+        if (!o || !parent) return out.setScalar(NaN)
+        const bounds = SpatialLayout.getBounds(o, referenceFrame)
+        if (bounds.isEmpty()) return out.setScalar(NaN)
+
+        const boundsSize = bounds.getSize(vectors.get())
+        const camera = o.parent as THREE.Camera
+        if (camera.isCamera) {
+            const position = vectors.get().setFromMatrixPosition(o.matrixWorld)
+            camera.worldToLocal(position)
+            position.applyMatrix4(camera.projectionMatrix)
+            const invProjection = matrices.get().getInverse(camera.projectionMatrix)
+            const left = vectors.get().set(-1, position.y, position.z).applyMatrix4(invProjection)
+            const right = vectors.get().set(1, position.y, position.z).applyMatrix4(invProjection)
+            const top = vectors.get().set(position.x, 1, position.z).applyMatrix4(invProjection)
+            const bottom = vectors.get().set(position.x, -1, position.z).applyMatrix4(invProjection)
+            const near = vectors.get().set(0, 0, -1).applyMatrix4(invProjection)
+            const far = vectors.get().set(0, 0, 1).applyMatrix4(invProjection)
+            const parentSize = position.set(right.distanceTo(left), top.distanceTo(bottom), far.distanceTo(near))
+            out.copy(scale).multiply(boundsSize).divide(parentSize)
+            matrices.pool(invProjection)
+            vectors.pool(position, left, right, top, bottom, near, far)
+        } else {
+            const parentBounds = SpatialLayout.getBounds(parent, referenceFrame)
+            if (!parentBounds.isEmpty()) {
+                const parentSize = parentBounds.getSize(vectors.get())
+                if (referenceFrame) {
+                    o.localToWorld(scale)
+                    referenceFrame.worldToLocal(scale)
+                }
+                out.copy(scale).multiply(boundsSize).divide(parentSize)
+                vectors.pool(parentSize)
+            } else {
+                out.setScalar(NaN)
+            }
+        }
+        vectors.pool(boundsSize)
+        if (!isFinite(out.x) || out.x === 0) out.x = NaN
+        if (!isFinite(out.y) || out.y === 0) out.y = NaN
+        if (!isFinite(out.z) || out.z === 0) out.z = NaN
         return out
     }
 
     public static convertOffset(offset:THREE.Vector3, start:THREE.Object3D, end:THREE.Object3D) {
-        const startReferenceFrame = SpatialLayout.resolveReferenceFrame(start)
-        const endReferenceFrame = SpatialLayout.resolveReferenceFrame(end)
+        const startReferenceFrame = SpatialLayout.getReferenceFrame(start)
+        const endReferenceFrame = SpatialLayout.getReferenceFrame(end)
         const startTranslate = SpatialLayout.getPositionForOffset(start, startReferenceFrame, offset, offset)
         const endInverseMatrixWorld = matrices.get().getInverse(end.matrixWorld)
         const endTranslate = startTranslate.applyMatrix4(start.matrixWorld).applyMatrix4(endInverseMatrixWorld)
@@ -194,17 +274,17 @@ export class SpatialLayout {
         return endAlign
     }
 
-    public static setReferenceFrame(object:THREE.Object3D, referenceFrame:THREE.Object3D|null|undefined) {
-        if (object.layoutReferenceFrame === referenceFrame) return
-        object.matrix.decompose(object.position, object.quaternion, object.scale)
-        object.layoutReferenceFrame = referenceFrame
-        const layout = object.layout
-        if (layout) {
-            const resolvedReferenceFrame = SpatialLayout.resolveReferenceFrame(object)
-            SpatialLayout.getOffsetForPosition(object.parent, resolvedReferenceFrame, V_000, layout.align)
-            SpatialLayout.getOffsetForPosition(object, resolvedReferenceFrame, V_000, layout.origin)
-        }
-    }
+    // public static setReferenceFrame(object:THREE.Object3D, referenceFrame:THREE.Object3D|null|undefined) {
+    //     if (object.layoutReferenceFrame === referenceFrame) return
+    //     // object.matrix.decompose(object.position, object.quaternion, object.scale)
+    //     object.layoutReferenceFrame = referenceFrame
+    //     const layout = object.layout
+    //     if (layout) {
+    //         const resolvedReferenceFrame = SpatialLayout.getReferenceFrame(object)
+    //         SpatialLayout.getOffsetForPosition(object.parent, resolvedReferenceFrame, layout.computedAlignTranslate, layout.align)
+    //         SpatialLayout.getOffsetForPosition(object, resolvedReferenceFrame, layout.computedOriginTranslate, layout.origin)
+    //     }
+    // }
 
     public static setParent(child:THREE.Object3D, parent:THREE.Object3D) {
         if (child.parent === parent) return
@@ -214,17 +294,17 @@ export class SpatialLayout {
         if (child.parent) child.parent.remove(child)
         const parentMatrixWorldInverse = matrices.get().getInverse(parent.matrixWorld) 
         child.matrix.copy(child.matrixWorld)
-        child.applyMatrix(parentMatrixWorldInverse)        
+        child.applyMatrix(parentMatrixWorldInverse)
         matrices.pool(parentMatrixWorldInverse)
         parent.add(child)
+        parent.updateMatrixWorld(true)
         
         const layout = child.layout
         if (layout) {
-            const referenceFrame = SpatialLayout.resolveReferenceFrame(child)
-            SpatialLayout.getOffsetForPosition(parent, referenceFrame, V_000, layout.align)
-            SpatialLayout.getOffsetForPosition(child, referenceFrame, V_000, layout.origin)
+            child.position.sub(layout.computedAlignPosition)
+            child.position.sub(layout.computedOriginPosition)
+            child.scale.divide(layout.computedSizeScale)
+            parent.updateMatrixWorld(true)
         }
-
-        parent.updateMatrixWorld(true)
     }
 }

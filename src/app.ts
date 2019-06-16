@@ -20,7 +20,8 @@ export default class App {
     scene = new THREE.Scene
     camera = new THREE.PerspectiveCamera
 
-    renderer = new THREE.WebGLRenderer({
+    renderer = new THREE.WebGLRenderer(<any>{
+        desynchronized: true,
         antialias: false,
         alpha: true,
     })
@@ -34,7 +35,6 @@ export default class App {
 
     constructor() {
         this.scene.add(this.camera)
-        this.scene.layoutReferenceFrame = this.camera
         this.renderer.vr.enabled = false // manage xr setup manually for now
 
         // this.renderer.setAnimationLoop(this.onAnimate)

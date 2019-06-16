@@ -1,65 +1,80 @@
 import * as THREE from 'three'
 import {SpatialLayout} from './SpatialLayout'
-import {vectors, V_000} from './SpatialUtils';
+import {matrices} from './SpatialUtils';
 
-export class SpatialTransitioner {
+export class SpatialTransformer {
 
-    static transitioners = new WeakMap<THREE.Object3D, SpatialTransitioner>()
+    static transformers = new WeakMap<THREE.Object3D, SpatialTransformer>()
 
     static get(o:THREE.Object3D) {
-        if (this.transitioners.has(o)) return this.transitioners.get(0)
-        const transitioner = new SpatialTransitioner(o)
-        this.transitioners.set(o, transitioner)
-        return transitioner
+        if (this.transformers.has(o)) return this.transformers.get(o)!
+        const transformer = new SpatialTransformer(o)
+        this.transformers.set(o, transformer)
+        return transformer
     }
 
     parent?: THREE.Object3D
-    position = new THREE.Vector3
-    quaternion = new THREE.Quaternion
-    scale = new THREE.Vector3
-    align = new THREE.Vector3
-    origin = new THREE.Vector3
 
-    constructor(public object:THREE.Object3D) {
-        this.position.copy(object.position)
-        this.quaternion.copy(object.quaternion)
-        this.scale.copy(object.scale)
-        if (object.layout) {
-            this.align.copy(object.layout.align)
-            this.origin.copy(object.layout.origin)
-        } else {
-            this.align.setScalar(NaN)
-            this.origin.setScalar(NaN)
-        }
+    position = new THREE.Vector3().set(0,0,0)
+    quaternion = new THREE.Quaternion().set(0,0,0,1)
+    scale = new THREE.Vector3().set(1,1,1)
+
+    align = new THREE.Vector3().set(NaN,NaN,NaN)
+    origin = new THREE.Vector3().set(NaN,NaN,NaN)
+    size = new THREE.Vector3().set(NaN,NaN,NaN)
+
+    private constructor(public object:THREE.Object3D) {
         if (!object.layout) object.layout = new SpatialLayout
+        object.layout['_transformer'] = this
     }
 
     update(lerpFactor:number) {
         const o = this.object
-        this.parent && SpatialLayout.setParent(o, this.parent)
+        const layout = o.layout!
+        const parent = this.parent
+
+        const parentChanged = parent !== undefined && parent !== o.parent
+        if (parentChanged ||
+            isNaN(this.size.x) !== isNaN(layout.size.x) ||
+            isNaN(this.size.y) !== isNaN(layout.size.y) ||
+            isNaN(this.size.z) !== isNaN(layout.size.z) ||
+            isNaN(this.align.x) !== isNaN(layout.align.x) ||
+            isNaN(this.align.y) !== isNaN(layout.align.y) ||
+            isNaN(this.align.z) !== isNaN(layout.align.z) ||
+            isNaN(this.origin.x) !== isNaN(layout.origin.x) ||
+            isNaN(this.origin.y) !== isNaN(layout.origin.y) ||
+            isNaN(this.origin.z) !== isNaN(layout.origin.z)) {
+            o.updateWorldMatrix(true, true)
+            const matrixWorld = matrices.get().copy(o.matrixWorld)
+            if (parentChanged) {
+                o.parent && o.parent.remove(o)
+                parent && parent.add(o)
+            }
+            this._lerpToLayoutTarget(layout.align, this.align, lerpFactor)
+            this._lerpToLayoutTarget(layout.origin, this.origin, lerpFactor)
+            this._lerpToLayoutTarget(layout.size, this.size, lerpFactor)
+            parent ? parent.updateWorldMatrix(true, true) : o.updateWorldMatrix(true, true)
+            const parentInverseWorld = parent ? matrices.get().getInverse(parent.matrixWorld) : matrices.get().identity()
+            o.matrix.copy(matrixWorld)
+            o.applyMatrix(parentInverseWorld)
+            o.position.sub(layout.computedAlignPosition).sub(layout.computedOriginPosition)
+            o.scale.divide(layout.computedSizeScale)
+            matrices.pool(matrixWorld, parentInverseWorld)
+        } else {
+            this._lerpToLayoutTarget(layout.align, this.align, lerpFactor)
+            this._lerpToLayoutTarget(layout.origin, this.origin, lerpFactor)
+            this._lerpToLayoutTarget(layout.size, this.size, lerpFactor)
+        }
         o.position.lerp(this.position, lerpFactor)
-        o.quaternion.slerp(this.quaternion, lerpFactor)
         o.scale.lerp(this.scale, lerpFactor)
-        const referenceFrame = SpatialLayout.resolveReferenceFrame(o)
-        if (isNaN(this.align.x) || isNaN(this.align.y) || isNaN(this.align.z)) {
-            const align = SpatialLayout.getOffsetForPosition(o.parent, referenceFrame, V_000, vectors.get())
-            if (!isNaN(this.align.x)) align.x = this.align.x
-            if (!isNaN(this.align.y)) align.y = this.align.y
-            if (!isNaN(this.align.z)) align.z = this.align.z
-            o.layout!.align.lerp(align, lerpFactor)
-            vectors.pool(align)
-        } else {
-            o.layout!.align.lerp(this.align, lerpFactor)
-        }
-        if (isNaN(this.origin.x) || isNaN(this.origin.y) || isNaN(this.origin.z)) {
-            const origin = SpatialLayout.getOffsetForPosition(o, referenceFrame, V_000, vectors.get())
-            if (!isNaN(this.origin.x)) origin.x = this.origin.x
-            if (!isNaN(this.origin.y)) origin.y = this.origin.y
-            if (!isNaN(this.origin.z)) origin.z = this.origin.z
-            o.layout!.origin.lerp(origin, lerpFactor)
-            vectors.pool(origin)
-        } else {
-            o.layout!.origin.lerp(this.origin, lerpFactor)
-        }
+        o.quaternion.slerp(this.quaternion, lerpFactor)
+        o.updateWorldMatrix(true, true)
+    }
+
+    private _lerpToLayoutTarget(vector:THREE.Vector3, target:THREE.Vector3, lerpFactor:number) {
+        vector.lerp(target, lerpFactor)
+        if (!isFinite(vector.x)) vector.x = target.x
+        if (!isFinite(vector.y)) vector.y = target.y
+        if (!isFinite(vector.z)) vector.z = target.z
     }
 }

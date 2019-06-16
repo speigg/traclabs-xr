@@ -24,3 +24,8 @@ app.start({
 
 import * as THREE from 'three'
 (window as any).THREE = THREE
+
+import {SpatialMetrics} from './lib/SpatialMetrics'
+import {SpatialLayout} from './lib/SpatialLayout'
+;(window as any).SpatialMetrics = SpatialMetrics
+;(window as any).SpatialLayout = SpatialLayout

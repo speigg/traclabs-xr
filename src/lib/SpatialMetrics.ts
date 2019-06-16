@@ -95,17 +95,14 @@ const FORWARD = new THREE.Vector3(0, 0, -1)
  */
 export class VisualFrustum {
     
-    min = new THREE.Vector3
-    max = new THREE.Vector3
+    min = new THREE.Vector3(Infinity,Infinity,Infinity)
+    max = new THREE.Vector3(-Infinity,-Infinity,-Infinity)
     minClamped = new THREE.Vector3
     maxClamped = new THREE.Vector3
     objectFilter?: (obj:THREE.Object3D) => boolean
 
     minClamp?:THREE.Vector3
     maxClamp?:THREE.Vector3
-
-    private static _convexMesh = new THREE.Mesh
-    private static _raycaster = new THREE.Raycaster(new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1))
 
     get left() {
         if (this.isEmpty()) return 0
@@ -272,7 +269,7 @@ export class VisualFrustum {
         const vec = vectors.get()
         this.min.x = -vec.set(-1,0,-1).applyMatrix4(inverseProjection).angleTo(FORWARD) * THREE.Math.RAD2DEG
         this.max.x = vec.set(1,0,-1).applyMatrix4(inverseProjection).angleTo(FORWARD) * THREE.Math.RAD2DEG
-        this.min.y = -vec.set(  0,-1,-1).applyMatrix4(inverseProjection).angleTo(FORWARD) * THREE.Math.RAD2DEG
+        this.min.y = -vec.set(0,-1,-1).applyMatrix4(inverseProjection).angleTo(FORWARD) * THREE.Math.RAD2DEG
         this.max.y = vec.set(0,1,-1).applyMatrix4(inverseProjection).angleTo(FORWARD) * THREE.Math.RAD2DEG
         this.min.z = -vec.set(0,0,-1).applyMatrix4(inverseProjection).z
         this.max.z = -vec.set(0,0,1).applyMatrix4(inverseProjection).z
@@ -281,10 +278,14 @@ export class VisualFrustum {
         this._applyClamping()
     }
 
-    setFromObjectHulls(o:THREE.Object3D, referenceFrame:THREE.Object3D) {
-        this._referenceFrame = referenceFrame
+    makeEmpty() {
         this.min.set(Infinity,Infinity,Infinity)
         this.max.set(-Infinity,-Infinity,-Infinity)
+    }
+
+    setFromObjectHulls(o:THREE.Object3D, referenceFrame:THREE.Object3D) {
+        this._referenceFrame = referenceFrame
+        this.makeEmpty()
         this.expandByObjectHulls(o)
         return this
     }
@@ -308,7 +309,7 @@ export class VisualFrustum {
 
     private _expandByMeshHull(m:THREE.Mesh, referenceFrame:THREE.Object3D) {
         const vertexPosition = vectors.get()
-        const localToReferenceFrame = matrices.get().getInverse(referenceFrame.matrixWorld).premultiply(m.matrixWorld)
+        const localToReferenceFrame = matrices.get().getInverse(referenceFrame.matrixWorld).multiply(m.matrixWorld)
         const convexGeometry = ConvexGeometry.get(m.geometry)!
         const metrics = SpatialMetrics.get(referenceFrame)
 
@@ -319,19 +320,6 @@ export class VisualFrustum {
             this.max.max(vertexVisualPosition)
         }
 
-        const convexMesh = VisualFrustum._convexMesh
-        convexMesh.matrixWorld.copy(m.matrixWorld)
-        convexMesh.geometry = convexGeometry        
-        VisualFrustum._raycaster.ray.origin.setFromMatrixPosition(referenceFrame.matrixWorld)
-        const isInsideMeshHull = VisualFrustum._raycaster.intersectObject(convexMesh, false).length > 0
-
-        if (!isInsideMeshHull) {
-            if (this.min.x > this.max.x) this.min.x += 360
-            if (this.min.y > this.max.y) this.min.y += 360
-        } else {
-            this.min.set(-180,-180, this.min.z)
-            this.max.set(180,180, this.max.z)
-        }
         this._applyClamping()
 
         vectors.pool(vertexPosition)
@@ -368,6 +356,8 @@ export class VisualFrustum {
 export class SpatialMetrics {
 
     private static _metrics = new WeakMap<THREE.Object3D, SpatialMetrics>()
+
+    public static objectFilter = (o:THREE.Object3D) => !o.layout && !o.layoutIgnore
 
     static get(o:THREE.Object3D) {
         if (this._metrics.has(o)) return this._metrics.get(o)!
@@ -609,7 +599,7 @@ export class SpatialMetrics {
      */
     private _box = new THREE.Box3
     getBoundsOf(target: THREE.Object3D, out = this._box) {
-        if (out === this._box) out.objectFilter = undefined
+        if (out === this._box) out.objectFilter = SpatialMetrics.objectFilter
         const matrixWorldInverse = matrices.get().getInverse(this.object.matrixWorld)
         out.setFromObjectHulls(target, matrixWorldInverse)
         matrices.pool(matrixWorldInverse)
@@ -619,7 +609,7 @@ export class SpatialMetrics {
 
     private _visualFrustum = new VisualFrustum
     getVisualFrustumOf(target: THREE.Object3D = this.object, out = this._visualFrustum) {
-        if (out === this._visualFrustum) out.objectFilter = undefined
+        if (out === this._visualFrustum) out.objectFilter = SpatialMetrics.objectFilter
         const camera = target as THREE.Camera
         if (camera.isCamera) out.setFromPerspectiveProjectionMatrix(camera.projectionMatrix)
         else out.setFromObjectHulls(target, this.object)

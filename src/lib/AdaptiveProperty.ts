@@ -56,7 +56,7 @@ export default class AdaptiveProperty<T> {
                 const property: AdaptiveProperty<U> = (this.object as any)[key]
                 const state = (stateMap as any)[key]
                 if (!property.is(state)) { return false }
-                if (property.changing()) { isNewState = true }
+                if (property.changed()) { isNewState = true }
             }
             return isNewState
         }
@@ -67,7 +67,7 @@ export default class AdaptiveProperty<T> {
                 const property: AdaptiveProperty<U> = (this.object as any)[key]
                 const state = (stateMap as any)[key]
                 if (!property.was(state)) { return false }
-                if (property.changing()) { isNewState = true }
+                if (property.changed()) { isNewState = true }
             }
             return isNewState
         }
@@ -164,19 +164,19 @@ export default class AdaptiveProperty<T> {
         return this._previousZone && this._previousZone.state === state
     }
 
-    changingFrom(state: keyof T) {
+    changedFrom(state: keyof T) {
         this._verifyState()
         if (this._previousZone === this._currentZone) { return false }
         return this._previousZone && this._previousZone.state === state
     }
 
-    changingTo(state: keyof T) {
+    changedTo(state: keyof T) {
         this._verifyState()
         if (this._previousZone === this._currentZone) { return false }
         return this._currentZone && this._currentZone.state === state
     }
 
-    changing() {
+    changed() {
         this._verifyState()
         return this._currentZone !== this._previousZone
     }

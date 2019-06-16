@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import {vectors, quaternions} from './SpatialUtils'
 
 const EMA_PERIOD = 5
 
@@ -51,19 +52,19 @@ export default class KinematicMetrics {
     private _angularVelocityW = new ExponentialMovingAverage(EMA_PERIOD)
 
     constructor(public object: THREE.Object3D, public origin: THREE.Object3D) {
-        this.object.getWorldPosition(this._lastObjectPosition)
-        this.origin.getWorldPosition(this._lastOriginPosition)
+        this._lastObjectPosition.setFromMatrixPosition(this.object.matrixWorld)
+        this._lastOriginPosition.setFromMatrixPosition(this.origin.matrixWorld)
     }
 
     update(deltaTime: number) {
         const lastObjectPosition = this._vectorLastPosition.copy(this._lastObjectPosition)
-        const objectPosition = this.object.getWorldPosition(this._vectorA)
+        const objectPosition = this._vectorA.setFromMatrixPosition(this.object.matrixWorld)
         this._lastObjectPosition.copy(objectPosition)
         const deltaObjectPosition = objectPosition.sub(lastObjectPosition)
         const objectVelocity = deltaObjectPosition.divideScalar(deltaTime)
 
         const lastOriginPosition = this._vectorLastPosition.copy(this._lastOriginPosition)
-        const originPosition = this.origin.getWorldPosition(this._vectorB)
+        const originPosition = this._vectorB.setFromMatrixPosition(this.origin.matrixWorld)
         this._lastOriginPosition.copy(originPosition)
         const deltaOriginPosition = originPosition.sub(lastOriginPosition)
         const originVelocity = deltaOriginPosition.divideScalar(deltaTime)
@@ -76,8 +77,11 @@ export default class KinematicMetrics {
         this.linearVelocity.set(this._linearVelocityX.mean, this._linearVelocityY.mean, this._linearVelocityZ.mean)
         this.linearSpeed = this.linearVelocity.length()
 
+        const tempVec = vectors.get()
         const lastObjectOrientation = this._quatLastOrientation.copy(this._lastObjectOrientation)
-        const objectOrientation = this.object.getWorldQuaternion(this._quatA)
+        this.object.matrixWorld.decompose(tempVec, this._quatA, tempVec)
+        const objectOrientation = this._quatA
+        
         this._lastObjectOrientation.copy(objectOrientation)
         const deltaObjectOrientation = lastObjectOrientation.inverse().multiply(objectOrientation)
         const objectAngularVelocity = THREE.Quaternion
@@ -85,7 +89,10 @@ export default class KinematicMetrics {
         objectAngularVelocity.normalize()
 
         const lastOriginOrientation = this._quatLastOrientation.copy(this._lastOriginOrientation)
-        const originOrientation = this.origin.getWorldQuaternion(this._quatB)
+        this.origin.matrixWorld.decompose(tempVec, this._quatB, tempVec)
+        const originOrientation = this._quatB
+        vectors.pool(tempVec)
+
         this._lastOriginOrientation.copy(originOrientation)
         const deltaOriginOrientation = lastOriginOrientation.inverse().multiply(originOrientation)
         const originAngularVelocity = THREE.Quaternion

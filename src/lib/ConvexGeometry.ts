@@ -17,7 +17,7 @@ export class ConvexGeometry extends THREE.Geometry {
         geometry as THREE.BufferGeometry : null
       const normalGeometry = bufferGeometry ? 
         (new THREE.Geometry).fromBufferGeometry(bufferGeometry) : geometry as THREE.Geometry
-      if (normalGeometry.vertices.length < 4) {
+      if (normalGeometry.vertices.length < 10) {
         this.hulls.set(geometry, normalGeometry)
         return normalGeometry
       }

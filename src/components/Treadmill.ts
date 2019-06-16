@@ -10,6 +10,7 @@ import {quaternions} from '../lib/SpatialUtils'
 import {SpatialLayout} from '../lib/SpatialLayout'
 import KinematicMetrics from '../lib/KinematicMetrics'
 import {makeTextSprite} from '../lib/label-utils'
+import { ConvexGeometry } from '@/lib/ConvexGeometry';
 // import { Line, Scene } from 'three';
 
 
@@ -163,6 +164,14 @@ export default class Treadmill {
                 this.snubberMesh = snubberMesh
                 this.snubberMesh.scale.setScalar(0.001)
                 this.snubberObject.add(snubberMesh)
+                const hull = ConvexGeometry.get(snubberMesh.geometry)
+                const hullMesh = new THREE.Mesh(hull, new THREE.MeshBasicMaterial({
+                    color: 0xF3A2B0,
+                    wireframe: true
+                }))
+                hullMesh.layoutIgnore = true
+                ;(hullMesh.geometry as THREE.Geometry).mergeVertices()
+                this.snubberMesh.add(hullMesh)
                 resolve(snubberMesh)
             })
         })
@@ -246,6 +255,7 @@ export default class Treadmill {
             this.snubberObject.layout = new SpatialLayout()
             this.snubberObject.layout.align.set(1,0,-2)
             this.snubberObject.layout.origin.set(1,0,1)
+            this.snubberObject.layout.size.set(0.2, NaN, NaN)
             await this.snubberMeshPromise
             // const visualDirection = new THREE.Vector2
             // const visualSize = 60
@@ -287,41 +297,41 @@ export default class Treadmill {
 
     update(event: any) {
 
-        this.updateAnnotations(event.deltaTime)
+        // this.updateAnnotations(event.deltaTime)
         this.cameraTargetKinematics.update(event.deltaTime)
         this.state.update(event.deltaTime)
 
-        if (this.facing.changingTo('false')) {
+        if (this.facing.changedTo('false')) {
             console.log('facing: false')
         }
 
-        if (this.facing.changingTo('true')) {
+        if (this.facing.changedTo('true')) {
             console.log('facing: true')
         }
 
-        if (this.visualSize.changingTo('small')) {
+        if (this.visualSize.changedTo('small')) {
             console.log('visualSize: small')
         }
 
-        if (this.visualSize.changingTo('medium')) {
+        if (this.visualSize.changedTo('medium')) {
             console.log('visualSize: medium')
         }
 
-        if (this.visualSize.changingTo('large')) {
+        if (this.visualSize.changedTo('large')) {
             console.log('visualSize: large')
         }
 
-        if (this.cameraLinearSpeed.changingTo('still')) {
+        if (this.cameraLinearSpeed.changedTo('still')) {
             console.log(`linear speed: still`)
         }
-        if (this.cameraAngularSpeed.changingTo('still')) {
+        if (this.cameraAngularSpeed.changedTo('still')) {
             console.log(`angular speed: still`)
         }
 
-        if (this.cameraLinearSpeed.changingTo('moving')) {
+        if (this.cameraLinearSpeed.changedTo('moving')) {
             console.log(`linear speed: moving`)
         }
-        if (this.cameraAngularSpeed.changingTo('moving')) {
+        if (this.cameraAngularSpeed.changedTo('moving')) {
             console.log(`angular speed: moving`)
         }
 

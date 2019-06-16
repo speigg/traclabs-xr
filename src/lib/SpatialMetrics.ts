@@ -1,7 +1,38 @@
 import * as THREE from 'three'
-import {V_000, V_010, V_111, vectors2, vectors, quaternions, matrices, traverse} from './SpatialUtils'
+import {vectors2, vectors, quaternions, matrices, traverse} from './SpatialUtils'
 import {ConvexGeometry} from './ConvexGeometry'
-import { Camera } from 'three';
+import {SimplifyModifier} from './SimplifyModifier'
+
+export class SimplifiedHull {
+    static hulls = new WeakMap<THREE.Geometry|THREE.BufferGeometry, THREE.Geometry>()
+  
+    static compute(geometry:THREE.Geometry|THREE.BufferGeometry, maxPoints:number) {
+      const bufferGeometry = (geometry as THREE.BufferGeometry).type === 'BufferGeometry' ? 
+        geometry as THREE.BufferGeometry : null
+      const normalGeometry = bufferGeometry ? 
+        new THREE.Geometry().fromBufferGeometry(bufferGeometry) : geometry as THREE.Geometry
+      if (normalGeometry.vertices.length < maxPoints) {
+        this.hulls.set(geometry, normalGeometry)
+        return normalGeometry
+      }
+    
+      const modifier = new (SimplifyModifier as any)()
+      let hull = new ConvexGeometry(normalGeometry.vertices) as THREE.Geometry
+      const count = hull.vertices.length
+      if (count > maxPoints) {
+        const simplified = modifier.modify( hull, hull.vertices.length - maxPoints )
+        hull = new THREE.Geometry().fromBufferGeometry(simplified)
+      }
+      this.hulls.set(geometry, hull)
+      return hull
+    } 
+    
+    static get(geometry:THREE.Geometry|THREE.BufferGeometry) {
+      if (this.hulls.has(geometry)) return this.hulls.get(geometry)!
+      return this.compute(geometry, 30)!
+    }
+}
+
 
 declare module 'three/src/math/Box3' {
     interface Box3 {
@@ -29,7 +60,7 @@ THREE.Box3.prototype.setFromObjectHulls = function() {
         } else {
             _mat4.copy( node.matrixWorld )
         }
-        for ( const v of ConvexGeometry.get(geometry).vertices ) {
+        for ( const v of SimplifiedHull.get(geometry).vertices ) {
             _vertex.copy( v ).applyMatrix4( _mat4 )
             this.expandByPoint( _vertex )
         }
@@ -310,10 +341,10 @@ export class VisualFrustum {
     private _expandByMeshHull(m:THREE.Mesh, referenceFrame:THREE.Object3D) {
         const vertexPosition = vectors.get()
         const localToReferenceFrame = matrices.get().getInverse(referenceFrame.matrixWorld).multiply(m.matrixWorld)
-        const convexGeometry = ConvexGeometry.get(m.geometry)!
+        const hull = SimplifiedHull.get(m.geometry)!
         const metrics = SpatialMetrics.get(referenceFrame)
 
-        for (const vertex of convexGeometry.vertices) {
+        for (const vertex of hull.vertices) {
             vertexPosition.copy(vertex).applyMatrix4(localToReferenceFrame)
             const vertexVisualPosition = metrics.getVisualPositionForCartesianPosition(vertexPosition, vertexPosition)
             this.min.min(vertexVisualPosition)

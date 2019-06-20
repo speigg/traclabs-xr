@@ -28,6 +28,18 @@ export class SpatialTransformer {
         object.layout['_transformer'] = this
     }
 
+    setPoseIdentity() {
+        this.position.setScalar(0)
+        this.quaternion.set(0,0,0,1)
+        this.scale.setScalar(1)
+    }
+
+    copyPose(target:THREE.Object3D) {
+        this.position.copy(target.position)
+        this.quaternion.copy(target.quaternion)
+        this.scale.copy(target.scale)
+    }
+
     update(lerpFactor:number) {
         const o = this.object
         const layout = o.layout!

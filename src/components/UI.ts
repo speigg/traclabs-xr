@@ -8,7 +8,7 @@ import InstructionPanel from './InstructionPanel.vue'
 import {vectors2, Q_IDENTITY} from '@/lib/SpatialUtils'
 import {SpatialMetrics} from '@/lib/SpatialMetrics'
 import {SpatialLayout} from '@/lib/SpatialLayout'
-import {SpatialTransformer as SpatialTransformer} from '@/lib/SpatialTransitioner'
+import {SpatialTransformer as SpatialTransformer} from '@/lib/SpatialTransformer'
 // import {SpatialPlacement, CameraSurface} from '@/lib/SpatialPlacement'
 import AdaptiveProperty from '@/lib/AdaptiveProperty'
 
@@ -184,6 +184,7 @@ export default class UI {
             transformer.position.copy(this.video.target.position)
             transformer.quaternion.copy(this.video.target.quaternion)
             transformer.scale.copy(this.video.target.scale)
+            // transformer.copyPose(this.video.target)
             transformer.align.setScalar(NaN)
             transformer.origin.setScalar(NaN)
             transformer.size.setScalar(NaN)

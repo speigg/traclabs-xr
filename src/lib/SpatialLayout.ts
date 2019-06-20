@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import {matrices, vectors} from './SpatialUtils'
 import {SpatialMetrics} from './SpatialMetrics'
-import {SpatialTransformer} from './SpatialTransitioner'
+import {SpatialTransformer} from './SpatialTransformer'
 
 declare module 'three/src/core/Object3D' {
     interface Object3D {

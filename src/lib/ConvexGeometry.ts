@@ -10,34 +10,6 @@ import {SimplifyModifier} from './SimplifyModifier'
 
 // ConvexGeometry
 export class ConvexGeometry extends THREE.Geometry {
-    
-    static hulls = new WeakMap<THREE.Geometry|THREE.BufferGeometry, THREE.Geometry>()
-  
-    static compute(geometry:THREE.Geometry|THREE.BufferGeometry, maxPoints:number) {
-      const bufferGeometry = (geometry as THREE.BufferGeometry).type === 'BufferGeometry' ? 
-        geometry as THREE.BufferGeometry : null
-      const normalGeometry = bufferGeometry ? 
-        new THREE.Geometry().fromBufferGeometry(bufferGeometry) : geometry as THREE.Geometry
-      if (normalGeometry.vertices.length < 10) {
-        this.hulls.set(geometry, normalGeometry)
-        return normalGeometry
-      }
-
-      const modifier = new (SimplifyModifier as any)()
-      let convexGeometry = new ConvexGeometry(normalGeometry.vertices) as THREE.Geometry
-      const count = convexGeometry.vertices.length
-      if (count > maxPoints) {
-        const simplified = modifier.modify( convexGeometry, convexGeometry.vertices.length - maxPoints )
-        convexGeometry = new THREE.Geometry().fromBufferGeometry(simplified)
-      }
-      this.hulls.set(geometry, convexGeometry)
-      return convexGeometry
-    } 
-  
-    static get(geometry:THREE.Geometry|THREE.BufferGeometry) {
-      if (this.hulls.has(geometry)) return this.hulls.get(geometry)!
-      return this.compute(geometry, 30)!
-    }
 
     constructor(public points:THREE.Vector3[]) {
         super()

@@ -5,13 +5,11 @@ const STLLoader: typeof THREE.BufferGeometryLoader = CreateSTLLoader({...THREE})
 
 import App from '../App'
 import AdaptiveProperty from '../lib/AdaptiveProperty'
-import {SpatialMetrics} from '../lib/SpatialMetrics'
+import {SpatialMetrics, SimplifiedHull} from '../lib/SpatialMetrics'
 import {quaternions} from '../lib/SpatialUtils'
 import {SpatialLayout} from '../lib/SpatialLayout'
 import KinematicMetrics from '../lib/KinematicMetrics'
 import {makeTextSprite} from '../lib/label-utils'
-import { ConvexGeometry } from '@/lib/ConvexGeometry';
-// import { Line, Scene } from 'three';
 
 
 interface Annotation {
@@ -164,15 +162,14 @@ export default class Treadmill {
                 this.snubberMesh = snubberMesh
                 this.snubberMesh.scale.setScalar(0.001)
                 this.snubberObject.add(snubberMesh)
-                const hull = ConvexGeometry.get(snubberMesh.geometry)
+                const hull = SimplifiedHull.get(snubberMesh.geometry)
                 const hullMesh = new THREE.Mesh(hull, new THREE.MeshBasicMaterial({
                     color: 0xF3A2B0,
                     wireframe: true
                 }))
                 hullMesh.layoutIgnore = true
-                ;(hullMesh.geometry as THREE.Geometry).mergeVertices()
                 this.snubberMesh.add(hullMesh)
-                resolve(snubberMesh)
+                resolve(snubberMesh) 
             })
         })
 

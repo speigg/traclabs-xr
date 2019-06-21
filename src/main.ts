@@ -1,12 +1,15 @@
 import AppBase from './app'
 import Treadmill from './components/Treadmill'
 import UI from './components/UI'
-import PRIDEClient from './lib/PRIDEClient'
+import PrideAPI from './lib/PrideAPI'
+
+PrideAPI.get()
+setInterval(() => PrideAPI.get(), 5000)
 
 class App extends AppBase {
-    pride = new PRIDEClient(this)
     treadmill = new Treadmill(this)
-    ui = new UI(this, this.pride, this.treadmill)
+    ui = new UI(this, this.treadmill)
+    pride = PrideAPI
 }
 
 const app = (window as any).app = new App()

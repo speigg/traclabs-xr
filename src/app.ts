@@ -1,6 +1,6 @@
 
 import * as THREE from 'three'
-import store from './store'
+import WebLayer3D from 'three-web-layer';
 
 export interface UpdateEvent {
     type: 'update'
@@ -16,7 +16,6 @@ export interface AppStartConfig {
 
 export default class App {
 
-    store = store
     scene = new THREE.Scene
     camera = new THREE.PerspectiveCamera
 
@@ -25,6 +24,8 @@ export default class App {
         antialias: false,
         alpha: true,
     })
+
+    raycaster = new THREE.Raycaster()
 
     // a map of XRCoordinateSystem instances and their Object3D proxies to be updated each frame
     xrObjects = new Map<any, THREE.Object3D>() // XRCoordinateSystem -> Three.js Object3D Map
@@ -36,6 +37,54 @@ export default class App {
     constructor() {
         this.scene.add(this.camera)
         this.renderer.vr.enabled = false // manage xr setup manually for now
+
+        const renderer = this.renderer
+        renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
+        renderer.domElement.addEventListener('touchstart', onTouchStart, false)
+        renderer.domElement.addEventListener('click', onClick, false)
+
+        const pointer = new THREE.Vector2()
+        const updateRay = (x:number, y:number) => {
+            pointer.x = ((x + window.pageXOffset) / document.documentElement.offsetWidth) * 2 - 1
+            pointer.y = (-(y + window.pageYOffset) / document.documentElement.offsetHeight) * 2 + 1
+            this.raycaster.setFromCamera(pointer, this.camera)
+        }
+        
+        function onMouseMove(event:MouseEvent) {
+            updateRay(event.clientX, event.clientY)
+        }
+        
+        function onClick(event:MouseEvent) {
+            updateRay(event.clientX, event.clientY)
+            redirectEvent(event)
+        }
+        
+            function onTouchMove(event:TouchEvent) {
+            event.preventDefault() // disable scrolling
+            updateRay(event.touches[0].clientX, event.touches[0].clientY)
+        }
+        
+        function onTouchStart(event:TouchEvent) {
+            updateRay(event.touches[0].clientX, event.touches[0].clientY)
+            redirectEvent(event)
+        }
+        
+        // redirect DOM events from the canvas, to the 3D scene,
+        // to the appropriate child Web3DLayer, and finally (back) to the
+        // DOM to dispatch an event on the intended DOM target
+        const redirectEvent = (evt:any) => {
+            const intersections = this.raycaster.intersectObject(this.scene, true)
+            for (const i of intersections) {
+                if (i.object instanceof WebLayer3D) {
+                    const hit = i.object.hitTest(this.raycaster.ray)
+                    if (hit) {
+                        hit.target.dispatchEvent(new evt.constructor(evt.type, evt))
+                        hit.target.focus()
+                        console.log('hit', hit.target, hit.layer)
+                    }
+                }
+            }
+        }
 
         // this.renderer.setAnimationLoop(this.onAnimate)
 
@@ -161,7 +210,7 @@ export default class App {
         // Prep THREE.js for the render of each XRView
         const baseLayer = frame.session.baseLayer
         this.renderer.autoClear = false
-        this.renderer.setPixelRatio(1)
+        this.renderer.setPixelRatio(2)
         this.renderer.setSize(baseLayer.framebufferWidth, baseLayer.framebufferHeight, false)
         this.renderer.clear()
         this.camera.matrixAutoUpdate = false

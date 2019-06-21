@@ -1,14 +1,14 @@
 import * as THREE from 'three'
 
 import App, {UpdateEvent} from '@/App'
-import Pride from '../lib/PRIDEClient'
 import WebLayer3D from 'three-web-layer'
 import Treadmill from './Treadmill'
-import InstructionPanel from './InstructionPanel.vue'
+import PrideAPI from '../lib/PrideAPI'
+import PrideVue from './Pride.vue'
 import {vectors2, Q_IDENTITY} from '@/lib/SpatialUtils'
 import {SpatialMetrics} from '@/lib/SpatialMetrics'
 import {SpatialLayout} from '@/lib/SpatialLayout'
-import {SpatialTransformer as SpatialTransformer} from '@/lib/SpatialTransformer'
+import {SpatialTransitioner as SpatialTransitioner} from '@/lib/SpatialTransitioner'
 // import {SpatialPlacement, CameraSurface} from '@/lib/SpatialPlacement'
 import AdaptiveProperty from '@/lib/AdaptiveProperty'
 
@@ -16,18 +16,19 @@ export default class UI {
 
     augmentations: {[name: string]: THREE.Object3D} = {}
 
-    instructionPanelVue = new InstructionPanel({
-        data: this.pride.data,
+    prideVue = new PrideVue({
+        data: PrideAPI.data,
     }).$mount()
 
-    instructionPanel = new WebLayer3D( this.instructionPanelVue.$el, {
+    pride = new WebLayer3D( this.prideVue.$el, {
         windowWidth: 300, pixelRatio: 3, layerSeparation: 0.001
     })
-    procedure = this.instructionPanel.getObjectByName('procedure')! as WebLayer3D
-    step = this.instructionPanel.getObjectByName('step')! as WebLayer3D
-    instruction = this.instructionPanel.getObjectByName('instruction')! as WebLayer3D
-    image = this.instructionPanel.getObjectByName('image')! as WebLayer3D
-    video = this.instructionPanel.getObjectByName('video')! as WebLayer3D
+    procedure = this.pride.getObjectByName('procedure')! as WebLayer3D
+    step = this.pride.getObjectByName('step')! as WebLayer3D
+    instruction = this.pride.getObjectByName('instruction')! as WebLayer3D
+    image = this.pride.getObjectByName('image')! as WebLayer3D
+    video = this.pride.getObjectByName('video')! as WebLayer3D
+    xrButton = this.pride.getObjectByName('xr')! as WebLayer3D
 
     // doneButton = new HTMLElement3D('')
     // skipButton = new HTMLElement3D('')
@@ -56,20 +57,28 @@ export default class UI {
         ],
     })
 
-    box = new THREE.BoxHelper(this.instructionPanel)
+    box = new THREE.BoxHelper(this.pride)
 
-    constructor(private app: App, private pride:Pride, private treadmill: Treadmill) {
+    constructor(private app: App, private treadmill: Treadmill) {
+
+        const containerElement = this.prideVue.$el.parentElement!
+        // Argon quirk (tofix): move outside of body so it is visible in XR mode
+        document.documentElement.appendChild(containerElement)
+        // make it dynmically resize
+        containerElement.style.width = '100%'
+        containerElement.style.height = '100%'
 
         // this.treadmill.snubberObject.add(
         // app.camera.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0), 0.1)
 
-        let transformer = SpatialTransformer.get(this.instructionPanel)
+        let transformer = SpatialTransitioner.get(this.pride)
         transformer.parent = app.camera
         transformer.align.set(0,0,-0.1)
         transformer.origin.set(0,0,-1)
-        transformer.size.set(0.5, NaN, NaN)
-        this.instructionPanel.layout!.align.copy(transformer.align)
-        this.instructionPanel.layout!.origin.copy(transformer.origin)
+        transformer.size.set(NaN, 1, NaN)
+        this.pride.layout!.align.copy(transformer.align)
+        this.pride.layout!.origin.copy(transformer.origin)
+        this.pride.layout!.size.copy(transformer.size)
 
 
         // transformer = SpatialTransformer.get(this.video)
@@ -84,9 +93,8 @@ export default class UI {
         axes.layout!.align.set(0,-1,0)
         axes.layout!.origin.set(-1,-1,-1)
         axes.layout!.size.set(1,1,1)
-        this.instructionPanel.add(axes)
+        this.pride.add(axes)
 
-        setInterval(() => this.pride.get(), 5000)
 
 
         var radius = 100;
@@ -101,14 +109,11 @@ export default class UI {
         var sphere = new THREE.Mesh(geometry, material);
         app.camera.add(sphere);
 
-        // Argon quirk (tofix): move outside of body so it is visible in XR mode
-        document.documentElement.appendChild(this.instructionPanelVue.$el.parentElement!)
-
         this.prepare()
     }
 
     async prepare() {
-        const result = await this.pride.get()
+        const result = await PrideAPI.get()
         // const steplist = result.procedureElementInfo.steplist
         // this.instructionPanel.vue.step = steplist[steplist.length - 1].title
         // this.instructionPanel.vue.instruction = result.text
@@ -116,7 +121,7 @@ export default class UI {
 
     update(event: UpdateEvent) {
 
-        const prideObjects = this.pride.data.objects
+        const prideObjects = PrideAPI.data.objects
         for (const name in prideObjects) {
             const prideObject = prideObjects[name]
             let augmentation = this.augmentations[name]
@@ -160,45 +165,33 @@ export default class UI {
         this.snubberVisualSize.update(event.deltaTime)
         this.treadmillDirection.update(event.deltaTime)
         
-        // SpatialTransitioner.get(this.video).update(lerpFactor)
-        SpatialTransformer.get(this.instructionPanel).update(lerpFactor)
+        
+        SpatialTransitioner.get(this.pride).update(lerpFactor)
 
-        if (this.treadmillDirection.is('forward')) {
-            this.instructionPanel.contentTargetOpacity = 0
-            this.video.target.position.setScalar(0)
+        // if (this.treadmillDirection.is('forward')) {
+        //     this.instructionPanel.contentTargetOpacity = 0
 
-            let transformer = SpatialTransformer.get(this.video)
-            transformer.position.setScalar(0)
-            transformer.quaternion.set(0,0,0,1)
-            transformer.scale.setScalar(1)
-            transformer.align.setScalar(0)
-            transformer.origin.setScalar(0)
-            transformer.size.setScalar(0.5)
-            transformer.parent = this.treadmill.treadmillObject
-            transformer.update(lerpFactor)
+        //     let transition = SpatialTransitioner.get(this.video).reset()
+        //     transition.parent = this.treadmill.treadmillObject
+        //     transition.align.setScalar(0)
+        //     transition.origin.setScalar(0)
+        //     transition.size.setScalar(0.5)
+        //     transition.update(lerpFactor)
 
-            SpatialTransformer.get(this.procedure).update(lerpFactor)
-        } else {
-            let transformer = SpatialTransformer.get(this.video)
-            transformer.parent = this.video.parentLayer!
-            transformer.position.copy(this.video.target.position)
-            transformer.quaternion.copy(this.video.target.quaternion)
-            transformer.scale.copy(this.video.target.scale)
-            // transformer.copyPose(this.video.target)
-            transformer.align.setScalar(NaN)
-            transformer.origin.setScalar(NaN)
-            transformer.size.setScalar(NaN)
-            transformer.update(lerpFactor)
+        //     SpatialTransitioner.get(this.procedure).update(lerpFactor)
+        // } else {
+        //     let transition = SpatialTransitioner.get(this.video)
+        //     transition.setFromObject(this.video.target)
+        //     transition.parent = this.video.parentLayer!
+        //     transition.update(lerpFactor)
 
-            transformer = SpatialTransformer.get(this.procedure)
-            transformer.parent = this.procedure.parentLayer!
-            transformer.align.setScalar(NaN)
-            transformer.origin.setScalar(NaN)
-            transformer.size.setScalar(NaN)
-            transformer.update(lerpFactor)
-        }
+        //     transition = SpatialTransitioner.get(this.procedure).reset()
+        //     transition.parent = this.procedure.parentLayer!
+        //     transition.update(lerpFactor)
+        // }
 
-        this.instructionPanel.update(lerpFactor)
+        // this.video.shouldApplyTargetLayout = false
+        this.pride.update(lerpFactor)
 
         // const videoLayer = this.instructionPanel.getObjectByName('video') as WebLayer3D
         // if (videoLayer) {
@@ -230,7 +223,7 @@ export default class UI {
     // }
 
     attachToScreen() {
-        const transitioner = SpatialTransformer.get(this.instructionPanel)
+        const transitioner = SpatialTransitioner.get(this.pride)
         transitioner.parent = this.app.camera
         transitioner.align.set(-1,0,-0.5)
         transitioner.origin.set(-1,0,-1)
@@ -238,7 +231,7 @@ export default class UI {
     }
 
     attachToWorld() {
-        const transitioner = SpatialTransformer.get(this.instructionPanel)
+        const transitioner = SpatialTransitioner.get(this.pride)
         transitioner.parent = this.treadmill.snubberObject
         transitioner.align.set(0,0,1)
         transitioner.origin.set(0,0,0)

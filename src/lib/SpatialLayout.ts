@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import {matrices, vectors} from './SpatialUtils'
 import {SpatialMetrics} from './SpatialMetrics'
-import {SpatialTransformer} from './SpatialTransformer'
+import {SpatialTransitioner} from './SpatialTransitioner'
 
 declare module 'three/src/core/Object3D' {
     interface Object3D {
@@ -66,7 +66,7 @@ export class SpatialLayout {
     computedBounds = new THREE.Box3
     computedParentBounds = new THREE.Box3 as THREE.Box3 | null
     
-    private _transformer?: SpatialTransformer
+    private _transformer?: SpatialTransitioner
 
     constructor(config?:{align?:THREE.Vector3,origin?:THREE.Vector3,size?:THREE.Vector3}) {
         if (config) {

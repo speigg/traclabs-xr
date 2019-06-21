@@ -2,14 +2,14 @@ import * as THREE from 'three'
 import {SpatialLayout} from './SpatialLayout'
 import {matrices} from './SpatialUtils';
 
-export class SpatialTransformer {
+export class SpatialTransitioner {
 
-    static transformers = new WeakMap<THREE.Object3D, SpatialTransformer>()
+    static map = new WeakMap<THREE.Object3D, SpatialTransitioner>()
 
     static get(o:THREE.Object3D) {
-        if (this.transformers.has(o)) return this.transformers.get(o)!
-        const transformer = new SpatialTransformer(o)
-        this.transformers.set(o, transformer)
+        if (this.map.has(o)) return this.map.get(o)!
+        const transformer = new SpatialTransitioner(o)
+        this.map.set(o, transformer)
         return transformer
     }
 
@@ -28,16 +28,27 @@ export class SpatialTransformer {
         object.layout['_transformer'] = this
     }
 
-    setPoseIdentity() {
+    reset() {
         this.position.setScalar(0)
         this.quaternion.set(0,0,0,1)
         this.scale.setScalar(1)
+        this.align.set(NaN,NaN,NaN)
+        this.origin.set(NaN,NaN,NaN)
+        this.size.set(NaN,NaN,NaN)
+        return this
     }
 
-    copyPose(target:THREE.Object3D) {
+    setFromObject(target:THREE.Object3D) {
+        this.reset()
         this.position.copy(target.position)
         this.quaternion.copy(target.quaternion)
         this.scale.copy(target.scale)
+        if (target.layout) {
+            this.align.copy(target.layout.align)
+            this.origin.copy(target.layout.origin)
+            this.size.copy(target.layout.size)
+        }
+        return this
     }
 
     update(lerpFactor:number) {

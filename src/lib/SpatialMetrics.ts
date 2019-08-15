@@ -39,6 +39,8 @@ declare module 'three/src/math/Box3' {
         objectFilter?: (obj:THREE.Object3D) => boolean
         setFromObjectHulls(object:THREE.Object3D, transform?: THREE.Matrix4): Box3
         setFromObjectBoxes(object: THREE.Object3D, transform?: THREE.Matrix4): Box3
+        getPositionForOffset(offset:THREE.Vector3, out:THREE.Vector3) : THREE.Vector3
+        getOffsetForPosition(position:THREE.Vector3, out:THREE.Vector3) : THREE.Vector3
     }
 }
 
@@ -60,7 +62,9 @@ THREE.Box3.prototype.setFromObjectHulls = function() {
         } else {
             _mat4.copy( node.matrixWorld )
         }
-        for ( const v of SimplifiedHull.get(geometry).vertices ) {
+        const vertices = SimplifiedHull.get(geometry).vertices    
+        for (let i = 0; i < vertices.length; ++i) {
+            const v = vertices[i]
             _vertex.copy( v ).applyMatrix4( _mat4 )
             this.expandByPoint( _vertex )
         }
@@ -68,8 +72,9 @@ THREE.Box3.prototype.setFromObjectHulls = function() {
     return function( this: THREE.Box3, object: THREE.Object3D, transform?: THREE.Matrix4) {
         _transform = transform
         this.makeEmpty()
-        extendFromObject.call(this, object)
-        for (const c of object.children) {
+        extendFromObject.call(this, object) 
+        for (let i = 0; i < object.children.length; ++i) {
+            const c = object.children[i]
             traverse(c, onTraverse, this)
         }
         return this
@@ -117,6 +122,43 @@ THREE.Box3.prototype.setFromObjectBoxes = function() {
         return this
     }
 
+}()
+
+THREE.Box3.prototype.getPositionForOffset = function() {
+    const center = new THREE.Vector3
+    const size = new THREE.Vector3
+    return function getPositionForOffset(this:THREE.Box3, offset:THREE.Vector3, out:THREE.Vector3) {
+        if (!this.isEmpty()) {
+            this.getCenter(center)
+            this.getSize(size)
+            out.copy(offset).multiplyScalar(0.5).multiply(size).add(center)
+        } else {
+            out.setScalar(0)
+        }
+        if (!isFinite(out.x)) out.x = 0
+        if (!isFinite(out.y)) out.y = 0
+        if (!isFinite(out.z)) out.z = 0
+        return out
+    }
+}()
+
+THREE.Box3.prototype.getOffsetForPosition = function() {
+    const center = new THREE.Vector3
+    const size = new THREE.Vector3
+    return function getOffsetForPosition(this:THREE.Box3,position:THREE.Vector3, out:THREE.Vector3) {
+        if (!this.isEmpty()) {  
+            this.getCenter(center)
+            this.getSize(size)
+            out.copy(position)
+            out.sub(center).divide(size).multiplyScalar(2)
+        } else {
+            out.setScalar(0)
+        }
+        if (!isFinite(out.x)) out.x = 0
+        if (!isFinite(out.y)) out.y = 0
+        if (!isFinite(out.z)) out.z = 0
+        return out
+    }
 }()
 
 const FORWARD = new THREE.Vector3(0, 0, -1)
@@ -230,7 +272,8 @@ export class VisualFrustum {
         const minDirection = SpatialMetrics.getCartesianForSphericalDirection(this.min, vectors.get())
         const maxDirection = SpatialMetrics.getCartesianForSphericalDirection(this.max, vectors.get())
         const diagonal = minDirection.angleTo(maxDirection)
-        vectors.pool(minDirection, maxDirection)
+        vectors.pool(minDirection)
+        vectors.pool(maxDirection)
         return diagonal * THREE.Math.RAD2DEG
     }
 
@@ -239,7 +282,8 @@ export class VisualFrustum {
         const minDirection = SpatialMetrics.getCartesianForSphericalDirection(this.minClamped, vectors.get())
         const maxDirection = SpatialMetrics.getCartesianForSphericalDirection(this.maxClamped, vectors.get())
         const diagonal = minDirection.angleTo(maxDirection)
-        vectors.pool(minDirection, maxDirection)
+        vectors.pool(minDirection)
+        vectors.pool(maxDirection)
         return diagonal * THREE.Math.RAD2DEG
     }
 
@@ -283,7 +327,8 @@ export class VisualFrustum {
         const center = this.getCenter(vectors.get())
         const size = this.getSize(vectors.get())
         out.copy(offset).multiplyScalar(0.5).multiply(size).add(center)
-        vectors.pool(center, size)
+        vectors.pool(center)
+        vectors.pool(size)
         return out
     }
 
@@ -291,7 +336,8 @@ export class VisualFrustum {
         const center = this.getClampedCenter(vectors.get())
         const size = this.getClampedSize(vectors.get())
         out.copy(offset).multiplyScalar(0.5).multiply(size).add(center)
-        vectors.pool(center, size)
+        vectors.pool(center) 
+        vectors.pool(size)
         return out
     }
     
@@ -388,7 +434,7 @@ export class SpatialMetrics {
 
     private static _metrics = new WeakMap<THREE.Object3D, SpatialMetrics>()
 
-    public static objectFilter = (o:THREE.Object3D) => !o.layout && !o.layoutIgnore
+    public static objectFilter = (o:THREE.Object3D) => !o.layout && !o.layoutIgnore 
 
     static get(o:THREE.Object3D) {
         if (this._metrics.has(o)) return this._metrics.get(o)!
@@ -603,7 +649,8 @@ export class SpatialMetrics {
         const targetWorldOrientation = target.getWorldQuaternion(quaternions.get())
         const inverseThisWorldOrientation = this.object.getWorldQuaternion(quaternions.get()).inverse()
         out.multiplyQuaternions(inverseThisWorldOrientation, targetWorldOrientation)
-        quaternions.pool(targetWorldOrientation, inverseThisWorldOrientation)
+        quaternions.pool(targetWorldOrientation) 
+        quaternions.pool(inverseThisWorldOrientation)
         return out
     } 
 
@@ -628,14 +675,14 @@ export class SpatialMetrics {
      * @param target 
      * @param out 
      */
-    private _box = new THREE.Box3
     getBoundsOf(target: THREE.Object3D, out = this._box) {
         if (out === this._box) out.objectFilter = SpatialMetrics.objectFilter
-        const matrixWorldInverse = matrices.get().getInverse(this.object.matrixWorld)
+        const matrixWorldInverse = this._boundsMatrix.getInverse(this.object.matrixWorld)
         out.setFromObjectHulls(target, matrixWorldInverse)
-        matrices.pool(matrixWorldInverse)
         return out
     }
+    private _boundsMatrix = new THREE.Matrix4
+    private _box = new THREE.Box3
 
 
     private _visualFrustum = new VisualFrustum

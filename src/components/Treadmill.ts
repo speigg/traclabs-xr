@@ -6,7 +6,7 @@ const STLLoader: typeof THREE.BufferGeometryLoader = CreateSTLLoader({...THREE})
 import App from '../App'
 import AdaptiveProperty from '../lib/AdaptiveProperty'
 import {SpatialMetrics, SimplifiedHull} from '../lib/SpatialMetrics'
-import {quaternions} from '../lib/SpatialUtils'
+import {quaternions, V_001} from '../lib/SpatialUtils'
 import {SpatialLayout} from '../lib/SpatialLayout'
 import KinematicMetrics from '../lib/KinematicMetrics'
 import {makeTextSprite} from '../lib/label-utils'
@@ -21,6 +21,7 @@ interface Annotation {
 export default class Treadmill {
 
     snubberObject = new THREE.Object3D
+    private _snubberRoot = new THREE.Object3D
     grid = new THREE.GridHelper( 1, 10 )
 
     cameraMetrics = SpatialMetrics.get(this.app.camera)
@@ -146,10 +147,13 @@ export default class Treadmill {
 
     constructor(public app: App) {
         this.annotationViewpoint.position.set(0, 0, 2)
-        this.snubberObject.add(this.annotationViewpoint)
+        this.snubberObject.add(this._snubberRoot)
+        this._snubberRoot.add(this.annotationViewpoint)
+        this._snubberRoot.quaternion.setFromAxisAngle(V_001, Math.PI)
+        this._snubberRoot.scale.setScalar(0.01)
 
-        this.treadmillObject.name = 'treadmill'
         this.snubberObject.name = 'snubber'
+        this.treadmillObject.name = 'treadmill'
         this.annotationViewpoint.name = 'annotationViewpoint'
 
         // this.grid.rotateX(Math.PI / 2)
@@ -157,18 +161,20 @@ export default class Treadmill {
 
         this.snubberMeshPromise = new Promise((resolve) => {
             this.stlLoader.load('/resources/fullSnubberSimplified.stl', (snubberGeometry) => {
+                snubberGeometry.computeBoundsTree()
                 const snubberMaterial = new THREE.MeshNormalMaterial()
                 const snubberMesh = new THREE.Mesh(snubberGeometry, snubberMaterial)
                 this.snubberMesh = snubberMesh
-                this.snubberMesh.scale.setScalar(0.001)
-                this.snubberObject.add(snubberMesh)
-                const hull = SimplifiedHull.get(snubberMesh.geometry)
-                const hullMesh = new THREE.Mesh(hull, new THREE.MeshBasicMaterial({
-                    color: 0xF3A2B0,
-                    wireframe: true
-                }))
-                hullMesh.layoutIgnore = true
-                this.snubberMesh.add(hullMesh)
+                this.snubberMesh.scale.setScalar(0.01)
+                // this.snubberMesh.rotateZ(Math.PI)
+                this._snubberRoot.add(snubberMesh)
+                // const hull = SimplifiedHull.get(snubberMesh.geometry)
+                // const hullMesh = new THREE.Mesh(hull, new THREE.MeshBasicMaterial({
+                //     color: 0xF3A2B0,
+                //     wireframe: true
+                // }))
+                // hullMesh.layoutIgnore = true
+                // this.snubberMesh.add(hullMesh)
                 resolve(snubberMesh) 
             })
         })
@@ -184,8 +190,8 @@ export default class Treadmill {
                 new THREE.SphereGeometry(0.005),
             ))
 
-            this.snubberObject.add(anchorObject)
-            this.snubberObject.add(annotationObject)
+            this._snubberRoot.add(anchorObject)
+            // this.snubberObject.add(annotationObject)
             anchorObject.layoutIgnore = true
             annotationObject.layoutIgnore = true
 
@@ -241,24 +247,32 @@ export default class Treadmill {
                 line,
             })
         }
+
+        this.initDefault()
     }
 
-    async start(event: {session: any|null, vuforia: any|null}) {
-        const vuforia = event.vuforia
+    snubberTargetPosition = new THREE.Vector3(0.033, -0.062, 0.018)
 
-        if (!vuforia) {
-            this.app.scene.add(this.treadmillObject)
-            this.app.camera.add(this.snubberObject)
-            this.snubberObject.layout = new SpatialLayout()
-            this.snubberObject.layout.align.set(1,0,-2)
-            this.snubberObject.layout.origin.set(1,0,1)
-            this.snubberObject.layout.size.set(0.2, NaN, NaN)
-            await this.snubberMeshPromise
-            // const visualDirection = new THREE.Vector2
-            // const visualSize = 60
-            // this.cameraMetrics.setPositionFor(this.snubberObject, visualDirection, visualSize)
+    initDefault() {
+        // this.snubberTargetPosition.setScalar(0)
+        // this.treadmillObject.position.set(0,0,-0.5)
+        // this.treadmillObject.rotateZ(Math.PI)
+        // this.app.scene.add(this.treadmillObject)
+        // this.app.camera.add(this.snubberObject)
+    }
+
+    async enterXR(evt:any) {
+        const {session, vuforia} = this.app
+
+        if (!session || !vuforia) {
+            this.initDefault()
             return
         }
+
+        if (session) session.addEventListener('end', () => {
+            this.initDefault()
+        })
+
         // const dataSetId = await vuforia.fetchDataSet('/resources/Treadmill.xml')
         // const trackables = await vuforia.loadDataSet(dataSetId)
 
@@ -279,15 +293,16 @@ export default class Treadmill {
                 transparent: true,
             }),
         )
-        // this.treadmillObject.add(box)
+        box.visible = false
+        this.treadmillObject.add(box)
 
         const treadmillImage = new THREE.Object3D
         treadmillImage.add(this.snubberObject)
         treadmillImage.scale.setScalar(imageSize.y / 2)
         this.treadmillObject.add(treadmillImage)
-        treadmillImage.add(this.snubberObject)
+        // treadmillImage.add(this._snubberRoot)
 
-        this.snubberObject.position.set(0.33, -0.92, 0.18)
+        // this._snubberRoot.position.set(0.33, -0.92, 0.18)
 
         vuforia.activateDataSet(dataSetId)
     }
@@ -295,50 +310,50 @@ export default class Treadmill {
     update(event: any) {
 
         // this.updateAnnotations(event.deltaTime)
-        this.cameraTargetKinematics.update(event.deltaTime)
-        this.state.update(event.deltaTime)
+        // this.cameraTargetKinematics.update(event.deltaTime)
+        // this.state.update(event.deltaTime)
 
-        if (this.facing.changedTo('false')) {
-            console.log('facing: false')
-        }
-
-        if (this.facing.changedTo('true')) {
-            console.log('facing: true')
-        }
-
-        if (this.visualSize.changedTo('small')) {
-            console.log('visualSize: small')
-        }
-
-        if (this.visualSize.changedTo('medium')) {
-            console.log('visualSize: medium')
-        }
-
-        if (this.visualSize.changedTo('large')) {
-            console.log('visualSize: large')
-        }
-
-        if (this.cameraLinearSpeed.changedTo('still')) {
-            console.log(`linear speed: still`)
-        }
-        if (this.cameraAngularSpeed.changedTo('still')) {
-            console.log(`angular speed: still`)
-        }
-
-        if (this.cameraLinearSpeed.changedTo('moving')) {
-            console.log(`linear speed: moving`)
-        }
-        if (this.cameraAngularSpeed.changedTo('moving')) {
-            console.log(`angular speed: moving`)
-        }
-
-        // if (this.state.changingTo({cameraLinearSpeed: 'still', cameraAngularSpeed: 'still'})) {
-            // console.log(`total speed: still`)
-            this.snubberObject.updateMatrixWorld(false)
-            const worldToTargetSpace = this._scratchMatrix.getInverse(this.snubberObject.matrixWorld)
-            this.annotationViewpoint.copy(this.app.camera, false)
-            this.annotationViewpoint.applyMatrix(worldToTargetSpace)
+        // if (this.facing.changedTo('false')) {
+        //     console.log('facing: false')
         // }
+
+        // if (this.facing.changedTo('true')) {
+        //     console.log('facing: true')
+        // }
+
+        // if (this.visualSize.changedTo('small')) {
+        //     console.log('visualSize: small')
+        // }
+
+        // if (this.visualSize.changedTo('medium')) {
+        //     console.log('visualSize: medium')
+        // }
+
+        // if (this.visualSize.changedTo('large')) {
+        //     console.log('visualSize: large')
+        // }
+
+        // if (this.cameraLinearSpeed.changedTo('still')) {
+        //     console.log(`linear speed: still`)
+        // }
+        // if (this.cameraAngularSpeed.changedTo('still')) {
+        //     console.log(`angular speed: still`)
+        // }
+
+        // if (this.cameraLinearSpeed.changedTo('moving')) {
+        //     console.log(`linear speed: moving`)
+        // }
+        // if (this.cameraAngularSpeed.changedTo('moving')) {
+        //     console.log(`angular speed: moving`)
+        // }
+
+        // // if (this.state.changingTo({cameraLinearSpeed: 'still', cameraAngularSpeed: 'still'})) {
+        //     // console.log(`total speed: still`)
+        //     this._snubberRoot.updateMatrixWorld(false)
+        //     const worldToTargetSpace = this._scratchMatrix.getInverse(this._snubberRoot.matrixWorld)
+        //     this.annotationViewpoint.copy(this.app.camera, false)
+        //     this.annotationViewpoint.applyMatrix(worldToTargetSpace)
+        // // }
     }
 
     updateAnnotations(deltaTime: number) {

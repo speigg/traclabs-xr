@@ -82,7 +82,7 @@ export class SpatialTransitioner {
             o.applyMatrix(parentInverseWorld)
             o.position.sub(layout.computedAlignPosition).sub(layout.computedOriginPosition)
             o.scale.divide(layout.computedSizeScale)
-            matrices.pool(matrixWorld, parentInverseWorld)
+            matrices.poolAll()
         } else {
             this._lerpToLayoutTarget(layout.align, this.align, lerpFactor)
             this._lerpToLayoutTarget(layout.origin, this.origin, lerpFactor)
@@ -91,7 +91,7 @@ export class SpatialTransitioner {
         o.position.lerp(this.position, lerpFactor)
         o.scale.lerp(this.scale, lerpFactor)
         o.quaternion.slerp(this.quaternion, lerpFactor)
-        o.updateWorldMatrix(true, true)
+        // o.updateWorldMatrix(true, true)
     }
 
     private _lerpToLayoutTarget(vector:THREE.Vector3, target:THREE.Vector3, lerpFactor:number) {

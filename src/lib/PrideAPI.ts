@@ -49,22 +49,35 @@ interface HighlightAugmentation extends Augmentation {
 const TREADMILL_PROCEDURE_NAME = 'T2_Monthly_Maintenance_Top_Level'
     
 const data = {
+    json: '',
     procedure: 'Treadmill Monthly Maintenance',
     step: '',
     instruction: 'test',
     image: '',
-    video: '/armWiggleDemonstrated.mov',
+    video: 'armWiggleDemonstrated.mov',
+    elementType: '' as 'Info'|'Instruction',
+    elementSubType: '' as 'ManualInstruction'|'Conditional',
     // video: 'https://prideview-ar.traclabs.com/a7e79a1a-acff-43df-a1dc-f12f6bfcd6c9/4529_T2_Monthly_Maintenance_Top_Level_files/armWiggleDemonstrated.mov',
     objects: {} as {[name: string]: LabelAugmentation|BoxAugmentation|SphereAugmentation|HighlightAugmentation}
 }
 
-async function get() {
+async function get() : Promise<any> {
     const response = await fetch(BASE_URL + 'ARready', {mode: 'cors'}).catch()
     const json = await response.json().catch()
-    const steplist = json && json.procedureElementInfo.steplist
-    if (!steplist) return // sometimes this is missing after going back. 
+    const steplist = json && json.procedureElementInfo && json.procedureElementInfo.steplist
+    if (!steplist) {
+        // sometimes server still processing
+        return await get()
+    }
+    if (json.text === 'continue procedure') {
+        await done()
+        return await get()
+    }
+    data.json = json
     data.step = steplist[steplist.length - 1].title
     data.instruction = json.text
+    data.elementType = json.procedureElementInfo.elementType
+    data.elementSubType = json.procedureElementInfo.elementData[data.elementType.toLowerCase()+'Type']
     const objectKeys = Object.keys(json).filter((key) => key.toLowerCase().includes('object'))
     for (const key of objectKeys) {
         const jsonObject = json[key]

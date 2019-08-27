@@ -127,7 +127,7 @@ export default class Treadmill {
 
     state = new AdaptiveProperty.CompositeState<Treadmill>(this)
 
-    treadmillObject = new THREE.Object3D
+    treadmillAnchorObject? : THREE.Object3D
 
     stlLoader = new STLLoader() as THREE.BufferGeometryLoader
     snubberMeshPromise: Promise<THREE.Mesh>
@@ -153,7 +153,6 @@ export default class Treadmill {
         this._snubberRoot.scale.setScalar(0.01)
 
         this.snubberObject.name = 'snubber'
-        this.treadmillObject.name = 'treadmill'
         this.annotationViewpoint.name = 'annotationViewpoint'
 
         // this.grid.rotateX(Math.PI / 2)
@@ -249,16 +248,16 @@ export default class Treadmill {
         }
 
         this.initDefault()
+        this.app.camera.add(this.snubberObject)
     }
-
-    snubberTargetPosition = new THREE.Vector3(0.033, -0.062, 0.018)
-
+    
+    snubberTargetPosition = new THREE.Vector3()//.set(0,0,-1)
+    
     initDefault() {
-        // this.snubberTargetPosition.setScalar(0)
-        // this.treadmillObject.position.set(0,0,-0.5)
+        this.snubberTargetPosition.set(0,0,-1)
+        //.setScalar(0)
+        // this.treadmillObject.position.set(0,0,-1)
         // this.treadmillObject.rotateZ(Math.PI)
-        // this.app.scene.add(this.treadmillObject)
-        // this.app.camera.add(this.snubberObject)
     }
 
     async enterXR(evt:any) {
@@ -280,7 +279,8 @@ export default class Treadmill {
         const trackables = await vuforia.loadDataSet(dataSetId)
 
         const treadmillAnchor = trackables.get('treadmill')
-        this.app.getXRObject3D(treadmillAnchor)!.add(this.treadmillObject)
+        this.treadmillAnchorObject = this.app.getXRObject3D(treadmillAnchor)!
+        this.snubberTargetPosition.set(0.033, -0.062, 0.018)
         
 
         // Add a box to the trackable image
@@ -294,12 +294,12 @@ export default class Treadmill {
             }),
         )
         box.visible = false
-        this.treadmillObject.add(box)
+        this.treadmillAnchorObject.add(box)
 
         const treadmillImage = new THREE.Object3D
         treadmillImage.add(this.snubberObject)
         treadmillImage.scale.setScalar(imageSize.y / 2)
-        this.treadmillObject.add(treadmillImage)
+        this.treadmillAnchorObject.add(treadmillImage)
         // treadmillImage.add(this._snubberRoot)
 
         // this._snubberRoot.position.set(0.33, -0.92, 0.18)

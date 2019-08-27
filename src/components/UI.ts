@@ -69,8 +69,8 @@ export default class UI {
         ],
     })
 
-    treadmillDirection = new AdaptiveProperty({
-        metric: () => SpatialMetrics.get(this.app.camera).getVisualOffsetOf(this.treadmill.treadmillObject!),
+    snubberDirection = new AdaptiveProperty({
+        metric: () => SpatialMetrics.get(this.app.camera).getVisualOffsetOf(this.treadmill.snubberObject!),
         zones: [
             {state: 'left', threshold: 15, delay: 100},
             -60,
@@ -84,6 +84,10 @@ export default class UI {
 
     constructor(private app: App, private treadmill: Treadmill) {
 
+        ;(this.media.mesh.material as MeshBasicMaterial).transparent = false
+        ;(this.instruction.mesh.material as MeshBasicMaterial).transparent = false
+        ;(this.video.mesh.material as MeshBasicMaterial).transparent = false
+        
         setTimeout(() => (this.video.element as HTMLVideoElement).play(), 5000)
 
         // this.treadmill.snubberObject.add(
@@ -211,7 +215,7 @@ export default class UI {
 
 
         this.snubberVisualSize.update(event.deltaTime)
-        this.treadmillDirection.update(event.deltaTime)
+        this.snubberDirection.update(event.deltaTime)
         
         this.pride.options.autoRefresh = this.app.timeSinceLastResize > 500
         
@@ -230,10 +234,18 @@ export default class UI {
 
         transitioner = SpatialTransitioner.get(this.treadmill.snubberObject)
         if (this.data.xrMode) { 
-            transitioner.reset()
-            transitioner.parent = this.treadmill.treadmillObject
-            transitioner.position.copy(this.treadmill.snubberTargetPosition)
-            transitioner.quaternion.setFromAxisAngle(V_001, Math.PI)
+            if (this.treadmill.treadmillAnchorObject && this.treadmill.treadmillAnchorObject.parent) {
+                transitioner.reset()
+                transitioner.parent = this.treadmill.treadmillAnchorObject
+                transitioner.position.copy(this.treadmill.snubberTargetPosition)
+                transitioner.quaternion.setFromAxisAngle(V_001, Math.PI)
+            } else if (transitioner.parent !== this.app.scene) {
+                transitioner.reset()
+                transitioner.parent = this.app.scene
+                transitioner.position.set(0,0,-0.5)
+                transitioner.quaternion.copy(this.app.camera.quaternion)
+                this.app.camera.localToWorld(transitioner.position)
+            }
         } else {
             transitioner.reset()
             transitioner.parent = this.model
@@ -243,46 +255,45 @@ export default class UI {
         }
         transitioner.update(lerpFactor)
 
-        transitioner = SpatialTransitioner.get(this.content)
+        // transitioner = SpatialTransitioner.get(this.content)
+        // if (this.data.xrMode) {
+        //     transitioner.reset()
+        //     transitioner.parent = this.treadmill.treadmillObject
+        //     transitioner.size.set(NaN,0.5,NaN)
+        //     transitioner.quaternion.setFromAxisAngle(V_001, Math.PI)
+        // } else {
+        //     transitioner.setFromObject(this.content.target)
+        //     transitioner.parent = this.content.parentLayer!
+        // }
+        // transitioner.update(lerpFactor)
+
+        transitioner = SpatialTransitioner.get(this.instruction)
         if (this.data.xrMode) {
             transitioner.reset()
-            transitioner.parent = this.treadmill.treadmillObject
-            transitioner.size.set(NaN,0.5,NaN)
-            transitioner.quaternion.setFromAxisAngle(V_001, Math.PI)
+            transitioner.parent = this.treadmill.snubberObject
+            transitioner.origin.set(1,0,0)
+            transitioner.align.set(-1,0,0)
+            transitioner.size.set(NaN,1,NaN)
         } else {
-            transitioner.setFromObject(this.content.target)
-            transitioner.parent = this.content.parentLayer!
+            transitioner.setFromObject(this.instruction.target)
+            transitioner.parent = this.instruction.parentLayer!
         }
         transitioner.update(lerpFactor)
 
-        // transitioner = SpatialTransitioner.get(this.instruction)
-        // if (this.data.xrMode) {
-        //     transitioner.reset()
-        //     transitioner.parent = this.treadmill.snubberObject
-        //     transitioner.origin.set(1,0,0)
-        //     transitioner.align.set(-1,0,0)
-        //     transitioner.size.set(NaN,1,NaN)
-        // } else {
-        //     transitioner.setFromObject(this.instruction.target)
-        //     transitioner.parent = this.instruction.parentLayer!
-        // }
-        // transitioner.update(lerpFactor)
+        transitioner = SpatialTransitioner.get(this.media)
+        if (this.data.xrMode) {
+            transitioner.reset()
+            transitioner.parent = this.treadmill.snubberObject
+            transitioner.origin.set(-1,0,0)
+            transitioner.align.set(1,0,0)
+            transitioner.size.set(NaN,1,NaN)
+        } else {
+            transitioner.setFromObject(this.media.target)
+            transitioner.parent = this.media.parentLayer!
+        }
+        transitioner.update(lerpFactor)
 
-
-        // transitioner = SpatialTransitioner.get(this.media)
-        // if (this.data.xrMode) {
-        //     transitioner.reset()
-        //     transitioner.parent = this.treadmill.snubberObject
-        //     transitioner.origin.set(-1,0,0)
-        //     transitioner.align.set(1,0,0)
-        //     transitioner.size.set(NaN,1,NaN)
-        // } else {
-        //     transitioner.setFromObject(this.media.target)
-        //     transitioner.parent = this.media.parentLayer!
-        // }
-        // transitioner.update(lerpFactor)
-
-        if (this.treadmillDirection.is('forward')) {
+        if (this.snubberDirection.is('forward')) {
         //     this.instructionPanel.contentTargetOpacity = 0
 
         //     let transition = SpatialTransitioner.get(this.video).reset()

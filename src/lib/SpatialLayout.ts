@@ -1,39 +1,138 @@
 import * as THREE from 'three'
 import {matrices, vectors} from './SpatialUtils'
 import {SpatialMetrics} from './SpatialMetrics'
-import {SpatialTransitioner} from './SpatialTransitioner'
+import {SpatialLayoutTarget} from './SpatialLayoutTarget'
 
 declare module 'three/src/core/Object3D' {
     interface Object3D {
-        layout?: SpatialLayout
-        layoutIgnore?: boolean
+        layout: SpatialLayout
+        updateWorldMatrix(updateParents:boolean, updateChildren:boolean, updateLayout?:boolean) : void
     }
 }
 
-const originalUpdateMatrix = THREE.Object3D.prototype.updateMatrix
-THREE.Object3D.prototype.updateMatrix = function() {
-    originalUpdateMatrix.call(this)
-    if ((this as THREE.Camera).isCamera) return
+// const originalUpdateMatrix = THREE.Object3D.prototype.updateMatrix
+// THREE.Object3D.prototype.updateMatrix = function() {
+//     originalUpdateMatrix.call(this)
+//     const o = this
+//     const layout = o.layout
+//     const isBoundingContext = layout.isBoundingContext()
+
+//     let bounds:THREE.Box3|undefined = undefined
+//     if (isBoundingContext) {
+//         bounds = SpatialLayout.getBounds(o, layout.computedBounds) 
+//         const cameraParent = o.parent as THREE.Camera
+//         if (cameraParent && cameraParent.isCamera) {
+//             SpatialLayout.getCameraBounds(cameraParent, o, layout.computedParentBounds)
+//         } else if (o.parent) {
+//             layout.computedParentBounds.copy(o.parent.layout.computedBounds)
+//         } else {
+//             layout.computedParentBounds.makeEmpty()
+//         }
+//         const parentBounds = layout.computedParentBounds
+//         // update computed size
+//         const sizeScale = SpatialLayout.getScaleForSize(o, layout.size, layout.computedSizeScale)
+//         const scale = vectors.get().copy(o.scale).multiply(sizeScale)
+//         // update computed align & origin
+//         const alignPosition = parentBounds.getPositionForOffset(layout.align, layout.computedAlignPosition)
+//         if (o.parent && (o.parent as THREE.Camera).isCamera) alignPosition.z = layout.align.z || 0
+//         const originPosition = bounds!.getPositionForOffset(layout.origin, layout.computedOriginPosition)
+//         originPosition.negate().multiply(scale)
+//         // update matrix
+//         const translate = vectors.get().copy(o.position).add(alignPosition).add(originPosition)
+//         o.matrix.compose(translate, o.quaternion, scale)
+//         vectors.poolAll()
+//     } else {
+//         layout.computedAlignPosition.setScalar(0)
+//         layout.computedOriginPosition.setScalar(0)
+//         layout.computedSizeScale.setScalar(1)
+//         layout.computedParentBounds.makeEmpty()
+//         let hasNonPassiveChildren = false
+//         for (let i = 0; i < this.children.length; ++i) {
+//             const child = this.children[i]
+//             if (!child.layout.isPassive()) {
+//                 hasNonPassiveChildren = true
+//                 break
+//             }
+//         }
+//         if (hasNonPassiveChildren) {
+//             SpatialLayout.getBounds(o, layout.computedBounds) 
+//         } else {
+//             layout.computedBounds.makeEmpty()
+//         }
+//     }
+// }
+
+THREE.Object3D.prototype.updateMatrixWorld = function(force) {
+    this.updateWorldMatrix(false, true, true)
+}
+
+// const originalUpdateWorldMatrix = THREE.Object3D.prototype.updateWorldMatrix
+THREE.Object3D.prototype.updateWorldMatrix = function(updateParents:boolean, updateChildren:boolean, updateLayout:boolean=updateChildren) {
+    
     const o = this
     const layout = o.layout
+    if (updateLayout) layout._boundsValid = false
 
-    let bounds = layout ? SpatialLayout.getBounds(o, layout.computedBounds) : undefined
-    for (let i = 0; i < this.children.length; ++i) {
-        const child = this.children[i]
-        if (child.layout) {
-            if (!bounds) {
-                bounds = SpatialLayout.getBounds(o, child.layout.computedParentBounds)
-            } else {
-                child.layout.computedParentBounds.copy(bounds)
-            }
-        }
+
+    const parent = this.parent;
+
+    if ( updateParents === true && parent !== null ) {
+
+        parent.updateWorldMatrix( true, false, false );
+
     }
 
-    if (layout) {
+    if ( updateLayout && this.matrixAutoUpdate ) this.updateMatrix();
+
+    if ( this.parent === null ) {
+
+        this.matrixWorld.copy( this.matrix );
+
+    } else {
+
+        this.matrixWorld.multiplyMatrices( this.parent.matrixWorld, this.matrix );
+
+    }
+
+    // update children
+
+    if ( updateChildren === true ) {
+
+        var children = this.children;
+
+        for ( var i = 0, l = children.length; i < l; i ++ ) {
+
+            children[ i ].updateWorldMatrix( false, true, updateLayout );
+
+        }
+
+    }
+    
+    // originalUpdateWorldMatrix.call(this, updateParents, updateChildren)
+
+    if (!updateLayout) return
+
+    const isBoundingContext = layout.isBoundingContext()
+    
+
+    let bounds:THREE.Box3|undefined = undefined
+    if (isBoundingContext) {
+        bounds = SpatialLayout.getBounds(o, layout.computedBounds) 
+        layout._boundsValid = true
+
         const cameraParent = o.parent as THREE.Camera
         if (cameraParent && cameraParent.isCamera) {
             SpatialLayout.getCameraBounds(cameraParent, o, layout.computedParentBounds)
+        } else if (o.parent) {
+            if (!o.parent.layout._boundsValid) {
+                SpatialLayout.getBounds(o.parent, o.parent.layout.computedBounds)
+                o.parent.layout._boundsValid = true
+            }
+            layout.computedParentBounds.copy(o.parent.layout.computedBounds)
+        } else {
+            layout.computedParentBounds.makeEmpty()
         }
+
         const parentBounds = layout.computedParentBounds
         // update computed size
         const sizeScale = SpatialLayout.getScaleForSize(o, layout.size, layout.computedSizeScale)
@@ -43,14 +142,40 @@ THREE.Object3D.prototype.updateMatrix = function() {
         if (o.parent && (o.parent as THREE.Camera).isCamera) alignPosition.z = layout.align.z || 0
         const originPosition = bounds!.getPositionForOffset(layout.origin, layout.computedOriginPosition)
         originPosition.negate().multiply(scale)
-        // update matrix
+        // update matrices
         const translate = vectors.get().copy(o.position).add(alignPosition).add(originPosition)
         o.matrix.compose(translate, o.quaternion, scale)
+        o.parent ? o.matrixWorld.multiplyMatrices( o.parent.matrixWorld, o.matrix ) : o.matrixWorld.copy(o.matrix)
+        // update child world positions without recalculating layout
+        const children = o.children
+        for ( var i = 0, l = o.children.length; i < l; i ++ ) {
+            children[ i ].updateWorldMatrix( false, true, false );
+        }
         vectors.poolAll()
+    } else {
+        layout.computedAlignPosition.setScalar(0)
+        layout.computedOriginPosition.setScalar(0)
+        layout.computedSizeScale.setScalar(1)
+        layout.computedParentBounds.makeEmpty()
     }
 }
 
+const layoutMap = new WeakMap<THREE.Object3D, SpatialLayout>()
+Object.defineProperty(THREE.Object3D.prototype, 'layout', {
+    get: function getLayout(this:THREE.Object3D) {
+        let layout = layoutMap.get(this)
+        if (!layout) {
+            layout = new SpatialLayout(this)
+            layoutMap.set(this, layout)
+        }
+        return layout
+    }
+})
+
 export class SpatialLayout {
+
+    _boundsValid = false
+    forceBoundsExclusion = false
 
     align = new THREE.Vector3().set(NaN,NaN,NaN)
     origin = new THREE.Vector3().set(NaN,NaN,NaN)
@@ -66,16 +191,30 @@ export class SpatialLayout {
     computedBounds = new THREE.Box3
     computedParentBounds = new THREE.Box3
     
-    private _transformer?: SpatialTransitioner
+    target = new SpatialLayoutTarget()
 
-    constructor(config?:{align?:THREE.Vector3,origin?:THREE.Vector3,size?:THREE.Vector3}) {
-        if (config) {
-            if (config.align) this.align = config.align
-            if (config.origin) this.origin = config.origin
-            if (config.size) this.size = config.size
-        }
+    constructor(public object:THREE.Object3D) {
         this.computedBounds.objectFilter = SpatialMetrics.objectFilter
         this.computedParentBounds.objectFilter = SpatialMetrics.objectFilter
+    }
+
+    isPassive() {
+        return isNaN(this.align.x) && isNaN(this.align.y) && isNaN(this.align.z) &&
+            isNaN(this.origin.x) && isNaN(this.origin.y) && isNaN(this.origin.z) && 
+            isNaN(this.size.x) && isNaN(this.size.y) && isNaN(this.size.z)
+    }
+
+    isBoundingContext() {
+        if (this.forceBoundsExclusion) return true
+        if (!this.isPassive()) {
+            this.forceBoundsExclusion = true
+            return true
+        }
+        return false
+    }
+
+    update(lerp:number) {
+        SpatialLayoutTarget.lerp(this.object, this.target, lerp)
     }
 
     public static getBounds(o:THREE.Object3D, box:THREE.Box3) {
@@ -83,7 +222,6 @@ export class SpatialLayout {
     }
     
     public static getCameraBounds(camera:THREE.Camera, child:THREE.Object3D, box:THREE.Box3) {
-        if (!child.layout) throw new Error('Expected an Object3D with `layout` property')
         const alignZ = child.layout.align.z
         const projectionMatrixInverse = matrices.get().getInverse(camera.projectionMatrix)
         const near = box.min.set(0,0,-1).applyMatrix4(projectionMatrixInverse).z
@@ -101,10 +239,9 @@ export class SpatialLayout {
     private static _boundsSize = new THREE.Vector3
     private static _parentSize = new THREE.Vector3
     public static getScaleForSize(o:THREE.Object3D, size:THREE.Vector3, out:THREE.Vector3) {
-        if (!o || !o.layout) {
+        if (!o) {
             return out.setScalar(1)
-        }//throw new Error('Expected an Object3D with `layout` property')
-
+        }
         const bounds = o.layout.computedBounds
         const parentBounds = o.layout.computedParentBounds
         if (bounds.isEmpty() || parentBounds.isEmpty()) return out.setScalar(1)
@@ -113,24 +250,21 @@ export class SpatialLayout {
         const parentSize = parentBounds.getSize(this._parentSize).clampScalar(10e-6, Infinity)
         out.copy(parentSize).multiply(size).divide(boundsSize)
 
-        if (isFinite(out.x)) {
-            if (!isFinite(out.y)) out.y = out.x
-            if (!isFinite(out.z)) out.z = out.x
-        }
-        
-        if (isFinite(out.y)) {
-            if (!isFinite(out.x)) out.x = out.y
-            if (!isFinite(out.z)) out.z = out.y
-        }
-        
-        if (isFinite(out.z)) {
-            if (!isFinite(out.x)) out.x = out.z
-            if (!isFinite(out.y)) out.y = out.z
-        }
-
-        if (!isFinite(out.x) || out.x === 0) out.x = 1
-        if (!isFinite(out.y) || out.y === 0) out.y = 1
-        if (!isFinite(out.z) || out.z === 0) out.z = 1
+        const x = out.x
+        const y = out.y
+        const z = out.z
+        if (x === 0) out.x = Number.MIN_SAFE_INTEGER
+        if (y === 0) out.y = Number.MIN_SAFE_INTEGER
+        if (z === 0) out.z = Number.MIN_SAFE_INTEGER
+        // if any dimenions is not defined, scale it by the average of defined dimensions
+        const isValidX = !isNaN(x)
+        const isValidY = !isNaN(y)
+        const isValidZ = !isNaN(z)
+        const validDimensions = +isValidX + +isValidY + +isValidZ
+        const averageScale = (x||0 + y||0 + z||0)/validDimensions || 1
+        if (!isValidX) out.x = averageScale
+        if (!isValidY) out.y = averageScale
+        if (!isValidZ) out.z = averageScale
         return out
     }
 
@@ -145,13 +279,16 @@ export class SpatialLayout {
         out.copy(scale).multiply(boundsSize).divide(parentSize)
         vectors.pool(parentSize)
         
-        if (!isFinite(out.x) || out.x === 0) out.x = NaN
-        if (!isFinite(out.y) || out.y === 0) out.y = NaN
-        if (!isFinite(out.z) || out.z === 0) out.z = NaN
+        const x = out.x
+        const y = out.y
+        const z = out.z
+        if (x === 0) out.x = Number.MIN_SAFE_INTEGER
+        if (y === 0) out.y = Number.MIN_SAFE_INTEGER
+        if (z === 0) out.z = Number.MIN_SAFE_INTEGER
         return out
     }
 
-    public static getSizeToFit(o:THREE.Object3D, size:THREE.Vector3) {
+    public static getSizeToFit(o:THREE.Object3D, size:THREE.Vector3, fit:'contain'|'fill'|'cover' = 'contain') {
         if (!o || !o.layout) throw new Error('Expected an Object3D with `layout` property')
         const parentBounds = o.layout.computedParentBounds
         const bounds = o.layout.computedBounds
@@ -160,7 +297,13 @@ export class SpatialLayout {
         const parentAspectRatio = parentSize.x / parentSize.y
         const boundsAspectRatio = boundsSize.x / boundsSize.y
         if (boundsAspectRatio < parentAspectRatio) {
-            size.set(NaN, 1, NaN)
+            if (fit === 'contain') {
+                size.set(NaN, 1, NaN)
+            }  else if (fit === 'cover') {
+                size.set(1, NaN, NaN)
+            } else {
+                size.set(1,1,NaN)
+            }
         } else {
             size.set(1, NaN, NaN)
         }

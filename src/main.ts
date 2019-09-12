@@ -44,18 +44,18 @@ app.start().catch((e: Error) => {
 })
 
 
-var x = 0
+// var x = 0
 
-Object.defineProperty(app.treadmill.snubberObject.position, 'x', {
-    get: function () {
-        return x
-    },
+// Object.defineProperty(app.treadmill.snubberObject.position, 'x', {
+//     get: function () {
+//         return x
+//     },
 
-    set: function (value) {
-        if (isNaN(value)) debugger; // sets breakpoint
-        x = value
-    }
-});
+//     set: function (value) {
+//         if (isNaN(value)) debugger; // sets breakpoint
+//         x = value
+//     }
+// });
 
 
 import * as THREE from 'three'

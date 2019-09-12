@@ -203,7 +203,7 @@ THREE.Quaternion.prototype.slerpUnclamped = function( this: THREE.Quaternion, qb
     this._y = ( y * ratioA + this._y * ratioB )
     this._z = ( z * ratioA + this._z * ratioB )
 
-    this.onChangeCallback()
+    this._onChangeCallback()
 
     return this
 

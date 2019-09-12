@@ -191,8 +191,8 @@ export default class Treadmill {
 
             this._snubberRoot.add(anchorObject)
             // this.snubberObject.add(annotationObject)
-            anchorObject.layoutIgnore = true
-            annotationObject.layoutIgnore = true
+            anchorObject.layout.forceBoundsExclusion = true
+            annotationObject.layout.forceBoundsExclusion = true
 
             const canvas = (contentObject.material as any).map.image
             const anchorBody = new CANNON.Body({

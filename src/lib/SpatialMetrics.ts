@@ -434,7 +434,7 @@ export class SpatialMetrics {
 
     private static _metrics = new WeakMap<THREE.Object3D, SpatialMetrics>()
 
-    public static objectFilter = (o:THREE.Object3D) => !o.layout && !o.layoutIgnore 
+    public static objectFilter = (o:THREE.Object3D) => !o.layout.isBoundingContext()
 
     static get(o:THREE.Object3D) {
         if (this._metrics.has(o)) return this._metrics.get(o)!

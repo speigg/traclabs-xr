@@ -2,6 +2,8 @@ import AppBase from './app'
 import Treadmill from './components/Treadmill'
 import UI from './components/UI'
 import PrideAPI from './lib/PrideAPI'
+import * as THREE from 'three'
+import './lib/SpatialLayout'
 
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh'
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
@@ -25,7 +27,7 @@ class App extends AppBase {
     pride = PrideAPI
 }
 
-const app = (window as any).app = new App({
+const app = new App({
     onUpdate: (event) => {
         app.treadmill.update(event)
         app.ui.update(event)
@@ -43,25 +45,4 @@ app.start().catch((e: Error) => {
     alert(e)
 })
 
-
-// var x = 0
-
-// Object.defineProperty(app.treadmill.snubberObject.position, 'x', {
-//     get: function () {
-//         return x
-//     },
-
-//     set: function (value) {
-//         if (isNaN(value)) debugger; // sets breakpoint
-//         x = value
-//     }
-// });
-
-
-import * as THREE from 'three'
-(window as any).THREE = THREE
-
-import {SpatialMetrics} from './lib/SpatialMetrics'
-import {SpatialLayout} from './lib/SpatialLayout'
-;(window as any).SpatialMetrics = SpatialMetrics
-;(window as any).SpatialLayout = SpatialLayout
+Object.assign( window, { THREE, app } );

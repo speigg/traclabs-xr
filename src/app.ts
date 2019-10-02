@@ -1,6 +1,7 @@
 
 import * as THREE from 'three'
 import WebLayer3D from 'three-web-layer'
+import {VRController} from './lib/VRController'
 
 export interface EnterXREvent {
     type: 'enterxr'
@@ -26,7 +27,7 @@ window.addEventListener('vrdisplayconnect', (evt) => {
     lastConnectedVRDisplay = (evt as VRDisplayEvent).display;
 }, false)
 
-export default class App {
+export default class AppBase {
 
     scene = new THREE.Scene
     camera = new THREE.PerspectiveCamera
@@ -37,24 +38,28 @@ export default class App {
         alpha: true,
     })
 
+    clock = new THREE.Clock
+
     pointer = new THREE.Vector2()
     raycaster = new THREE.Raycaster()
 
     // a map of XRCoordinateSystem instances and their Object3D proxies to be updated each frame
     xrObjects = new Map<any, THREE.Object3D>() // XRCoordinateSystem -> Three.js Object3D Map
 
-    lastFrameTime = -1
-
     constructor(private _config: AppConfig) {
         this.scene.add(this.camera)
 
         const renderer = this.renderer
+        document.documentElement.append(this.renderer.domElement)
+        renderer.domElement.style.position = 'fixed'
+        renderer.domElement.style.width = '100%'
+        renderer.domElement.style.height ='100%'
+        renderer.domElement.style.top = '0'
         renderer.domElement.addEventListener('mousemove', onMouseMove)
         renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
         renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false})
         renderer.domElement.addEventListener('touchend', onTouchEnd, { passive: false})
         renderer.domElement.addEventListener('click', onClick, false)
-        renderer.autoClear = false
         renderer.setAnimationLoop(this.onAnimate)
 
         window.addEventListener('vrdisplaypresentchange', (evt) => {
@@ -108,6 +113,42 @@ export default class App {
 
         // const box = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1), new THREE.MeshNormalMaterial)
         // this.scene.add(box)
+        
+        // setup VRController
+        window.addEventListener( 'vr controller connected', ( event:any ) => {
+            var controller = event.detail
+            this.scene.add( controller )
+            controller.standingMatrix = renderer.vr.getStandingMatrix()
+            controller.head = this.camera
+            var
+            meshColorOff = 0xDB3236,//  Red.
+            meshColorOn  = 0xF4C20D,//  Yellow.
+            controllerMaterial = new THREE.MeshBasicMaterial({
+                color: meshColorOff
+            }),
+            controllerMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry( 0.005, 0.05, 0.1, 6 ),
+                controllerMaterial
+            ),
+            handleMesh = new THREE.Mesh(
+                new THREE.BoxGeometry( 0.03, 0.1, 0.03 ),
+                controllerMaterial
+            )
+            controllerMaterial.flatShading = true
+            controllerMesh.rotation.x = -Math.PI / 2
+            handleMesh.position.y = -0.05
+            controllerMesh.add( handleMesh )
+            controller.add( controllerMesh )
+            controller.addEventListener( 'primary press began', function( event:any ){
+                controllerMaterial.color.setHex( meshColorOn )
+            })
+            controller.addEventListener( 'primary press ended', function( event:any ){
+                controllerMaterial.color.setHex( meshColorOff )
+            })
+            controller.addEventListener( 'disconnected', function( event:any ){
+                controller.parent.remove( controller )
+            })
+        })
     }
 
     webLayers = new Set<WebLayer3D>()
@@ -130,28 +171,38 @@ export default class App {
 
     async start() {
         return this.enterXR().catch(() => {
-            document.documentElement.append(this.renderer.domElement)
-            this.renderer.domElement.style.position = 'fixed'
-            this.renderer.domElement.style.width = '100%'
-            this.renderer.domElement.style.height ='100%'
-            this.renderer.domElement.style.top = '0'
+            // document.documentElement.append(this.renderer.domElement)
+            // this.renderer.domElement.style.position = 'fixed'
+            // this.renderer.domElement.style.width = '100%'
+            // this.renderer.domElement.style.height ='100%'
+            // this.renderer.domElement.style.top = '0'
             this.renderer.domElement.style.backgroundColor = 'lightgrey'
             window.requestAnimationFrame(this.onAnimate)
         })
     }
     
     onAnimate = () => {
-        this.update()
-        this.renderer.render(this.scene, this.camera)
         if (!this.xrPresenting) {
             const canvas = this.renderer.domElement
             this._setSize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio)
         }
+        const delta = Math.min(this.clock.getDelta(), 1/60)
+        this.update(delta)
+        this.renderer.render(this.scene, this.camera)
     }
 
-    update = () => {
+    private _wasPresenting = false
+
+    update = (deltaTime:number) => {
+        
+        try {
+            // buggy on HoloLens, sometimes crashes :\
+            VRController.update()
+        } catch {} 
+        
 
         if (this.xrPresenting) {
+            this._wasPresenting = true
             const vrCamera = this.renderer.vr.getCamera(this.camera) as THREE.ArrayCamera  
             const firstCamera = vrCamera.cameras[0]         
             this.camera.matrix.identity()
@@ -160,6 +211,11 @@ export default class App {
             ;(this.camera as any).projectionMatrixInverse.getInverse(this.camera.projectionMatrix)
             this.camera.updateMatrixWorld(true)
         } else {
+            if (this._wasPresenting) {
+                this._wasPresenting = false
+                this._exitXR()
+                this.interactionSpace = 'screen'
+            }
             const canvas = this.renderer.domElement
             const width = canvas.clientWidth
             const height = canvas.clientHeight
@@ -169,7 +225,6 @@ export default class App {
             this.camera.far = 100000
             this.camera.updateProjectionMatrix()
         }
-        this.raycaster.setFromCamera(this.pointer, this.camera)
 
         if (this.session) {
             // update xr objects in the scene graph
@@ -194,11 +249,11 @@ export default class App {
         }
 
         // emit update event
-        const now = performance.now()
-        const deltaTime = Math.min(Math.max((now - this.lastFrameTime) / 1000, 0.001), 1 / 60)
-        this.lastFrameTime = now
         this._config!.onUpdate({type: 'update', deltaTime})
+        this.raycaster.setFromCamera(this.pointer, this.camera)
     }
+
+    public interactionSpace = 'screen' as 'screen' | 'world'
 
     public get xrPresenting() {
         return (this.renderer.vr as any).isPresenting()
@@ -227,6 +282,7 @@ export default class App {
                 this.renderer.vr.setDevice(device)
                 const success = device.requestPresent([{ source: this.renderer.domElement }])
                 success.then(() => {
+                    this.interactionSpace = 'world'
                     this._enterXR()
                 }).catch(() => {
                     this._exitXR()
@@ -253,6 +309,8 @@ export default class App {
                         callback(performance.now(), frame)
                     })
                 }
+            } else {
+                this.interactionSpace = 'world'
             }
             
             try {
@@ -292,6 +350,7 @@ export default class App {
     }
 
     private _exitXR() {
+        this.interactionSpace = 'screen'
         this.renderer.vr.enabled = false
         this._config.onExitXR({type:'exitxr'})
     }
@@ -308,7 +367,7 @@ export default class App {
             this.lastResize = performance.now()
         }
         this.timeSinceLastResize = performance.now() - this.lastResize
-        if (this.timeSinceLastResize > 500) {
+        if (this.timeSinceLastResize > 2000) {
             this.renderer.setSize(width, height, false)
             this.renderer.setPixelRatio(pixelRatio)
         } 

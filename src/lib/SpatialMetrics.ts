@@ -39,8 +39,8 @@ declare module 'three/src/math/Box3' {
         objectFilter?: (obj:THREE.Object3D) => boolean
         setFromObjectHulls(object:THREE.Object3D, transform?: THREE.Matrix4): Box3
         setFromObjectBoxes(object: THREE.Object3D, transform?: THREE.Matrix4): Box3
-        getPositionForOffset(offset:THREE.Vector3, out:THREE.Vector3) : THREE.Vector3
-        getOffsetForPosition(position:THREE.Vector3, out:THREE.Vector3) : THREE.Vector3
+        relativeToAbsolute(offset:THREE.Vector3, out:THREE.Vector3) : THREE.Vector3
+        absoluteToRelative(position:THREE.Vector3, out:THREE.Vector3) : THREE.Vector3
     }
 }
 
@@ -124,14 +124,14 @@ THREE.Box3.prototype.setFromObjectBoxes = function() {
 
 }()
 
-THREE.Box3.prototype.getPositionForOffset = function() {
+THREE.Box3.prototype.relativeToAbsolute = function() {
     const center = new THREE.Vector3
     const size = new THREE.Vector3
-    return function getPositionForOffset(this:THREE.Box3, offset:THREE.Vector3, out:THREE.Vector3) {
+    return function relativeToAbsolute(this:THREE.Box3, relativePosition:THREE.Vector3, out:THREE.Vector3) {
         if (!this.isEmpty()) {
             this.getCenter(center)
             this.getSize(size)
-            out.copy(offset).multiplyScalar(0.5).multiply(size).add(center)
+            out.copy(relativePosition).multiplyScalar(0.5).multiply(size).add(center)
         } else {
             out.setScalar(0)
         }
@@ -142,14 +142,14 @@ THREE.Box3.prototype.getPositionForOffset = function() {
     }
 }()
 
-THREE.Box3.prototype.getOffsetForPosition = function() {
+THREE.Box3.prototype.absoluteToRelative = function() {
     const center = new THREE.Vector3
     const size = new THREE.Vector3
-    return function getOffsetForPosition(this:THREE.Box3,position:THREE.Vector3, out:THREE.Vector3) {
+    return function absoluteToRelative(this:THREE.Box3,absolutePosition:THREE.Vector3, out:THREE.Vector3) {
         if (!this.isEmpty()) {  
             this.getCenter(center)
             this.getSize(size)
-            out.copy(position)
+            out.copy(absolutePosition)
             out.sub(center).divide(size).multiplyScalar(2)
         } else {
             out.setScalar(0)

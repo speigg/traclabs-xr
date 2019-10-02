@@ -6,7 +6,6 @@
 
 import * as THREE from 'three'
 import {QuickHull} from './QuickHull'
-import {SimplifyModifier} from './SimplifyModifier'
 
 // ConvexGeometry
 export class ConvexGeometry extends THREE.Geometry {

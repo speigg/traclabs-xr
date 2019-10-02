@@ -6,7 +6,7 @@
         <div data-layer id="content">
             <div id="instruction" data-layer>{{pride.instruction}}</div>
             <div data-layer data-layer-pixel-ratio="0.5" id="media">
-                <video id="video" loop webkit-playsinline playsinline="true" crossorigin="anonymous" autoplay muted data-layer v-show="pride.video" :src="pride.video"/>
+                <video id="video" loop webkit-playsinline playsinline="true" crossorigin="anonymous" muted data-layer v-show="pride.video" :src="pride.video"/>
                 <img id="image" crossorigin="anonymous" data-layer v-show="pride.image" :src="pride.image"/>
             </div>
             <div id="model" data-layer data-layer-pixel-ratio="0.5">

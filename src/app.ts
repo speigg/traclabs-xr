@@ -1,6 +1,6 @@
 
 import * as THREE from 'three'
-import WebLayer3D from 'three-web-layer'
+import {WebLayer3D} from 'three-web-layer'
 import {VRController} from './lib/VRController'
 
 export interface EnterXREvent {
@@ -182,9 +182,11 @@ export default class AppBase {
     }
     
     onAnimate = () => {
+        const canvas = this.renderer.domElement
         if (!this.xrPresenting) {
-            const canvas = this.renderer.domElement
             this._setSize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio)
+        } else {
+            this.renderer.setDrawingBufferSize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio)
         }
         const delta = Math.min(this.clock.getDelta(), 1/60)
         this.update(delta)
@@ -203,13 +205,13 @@ export default class AppBase {
 
         if (this.xrPresenting) {
             this._wasPresenting = true
-            const vrCamera = this.renderer.vr.getCamera(this.camera) as THREE.ArrayCamera  
-            const firstCamera = vrCamera.cameras[0]         
-            this.camera.matrix.identity()
-            this.camera.applyMatrix(firstCamera.matrix)
-            this.camera.projectionMatrix.copy(firstCamera.projectionMatrix)
-            ;(this.camera as any).projectionMatrixInverse.getInverse(this.camera.projectionMatrix)
-            this.camera.updateMatrixWorld(true)
+            const vrCamera = this.renderer.vr.getCamera(this.camera) as THREE.ArrayCamera
+            this.camera.matrix.copy(vrCamera.matrix)
+            this.camera.matrix.decompose(this.camera.position, this.camera.quaternion, this.camera.scale)
+            this.camera.projectionMatrix.copy(vrCamera.projectionMatrix)
+            this.camera.projectionMatrixInverse.getInverse(this.camera.projectionMatrix)
+            this.camera.updateWorldMatrix(true, false)
+            this.camera.updateMatrixWorld()
         } else {
             if (this._wasPresenting) {
                 this._wasPresenting = false
@@ -293,7 +295,7 @@ export default class AppBase {
             }
         }
 
-        const frameOfRefType = 'eye-level'
+        const frameOfRefType = 'local'
         ;(this.renderer.vr as any).setFrameOfReferenceType(frameOfRefType)
 
         const onXRSession = async (session:any) => {
@@ -317,7 +319,7 @@ export default class AppBase {
                 (this.renderer.vr as any).setSession(session)
             } catch {}
 
-            this.frameOfReference = await session.requestFrameOfReference(frameOfRefType)
+            this.frameOfReference = await session.requestReferenceSpace(frameOfRefType)
             
             session.addEventListener('end', () => {
                 this.session = undefined
@@ -335,9 +337,10 @@ export default class AppBase {
             this._enterXR()
         }
 
-        // if (navigator.xr.requestSession) {
-        //     return navigator.xr.requestSession('immersive-ar').then(onXRSession)
-        // }
+        if (navigator.xr.requestSession) {
+            var sessionInit = { optionalFeatures: [ 'local-floor', 'bounded-floor' ] };
+            return navigator.xr.requestSession('immersive-vr', sessionInit).then(onXRSession)
+        }
 
         return navigator.xr.requestDevice().then((device: any) => {
             return (device.requestSession({immersive: true, type: 'augmentation'})).then(onXRSession)

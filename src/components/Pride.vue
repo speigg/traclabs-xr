@@ -1,7 +1,7 @@
 
 <template>
     <div id="pride" data-layer-pixel-ratio="0.1" v-bind:class="{xr:xrMode}">
-        <div id="procedure" data-layer><img data-layer class="logo" src="/pride-view.png"/>Procedure: {{pride.procedure}}</div>
+        <div id="procedure" data-layer><img data-layer class="logo" src="../static/pride-view.png"/>Procedure: {{pride.procedure}}</div>
         <div id="step" data-layer>Step: <span id="type">{{pride.elementSubType}}</span> {{pride.step}}</div>
         <div data-layer id="content">
             <div id="instruction" data-layer>{{pride.instruction}}</div>

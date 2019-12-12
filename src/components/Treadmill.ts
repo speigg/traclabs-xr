@@ -3,11 +3,13 @@ import * as CANNON from 'cannon'
 import CreateSTLLoader from 'three-stl-loader'
 const STLLoader: typeof THREE.BufferGeometryLoader = CreateSTLLoader({...THREE})
 
+import {SpatialMetrics, Layout, V_001, quaternions} from 'ethereal'
+
 import App from '../App'
 import AdaptiveProperty from '../lib/AdaptiveProperty'
-import {SpatialMetrics, SimplifiedHull} from '../lib/SpatialMetrics'
-import {quaternions, V_001} from '../lib/SpatialUtils'
-import {SpatialLayout} from '../lib/SpatialLayout'
+// import {SpatialMetrics, SimplifiedHull} from '../lib/SpatialMetrics'
+// import {quaternions, V_001} from '../lib/SpatialUtils'
+// import {SpatialLayout} from '../lib/SpatialLayout'
 import KinematicMetrics from '../lib/KinematicMetrics'
 import {makeTextSprite} from '../lib/label-utils'
 
@@ -159,7 +161,7 @@ export default class Treadmill {
         // this.snubberObject.add(this.grid)
 
         this.snubberMeshPromise = new Promise((resolve) => {
-            this.stlLoader.load('/resources/fullSnubberSimplified.stl', (snubberGeometry) => {
+            this.stlLoader.load('/fullSnubberSimplified.stl', (snubberGeometry) => {
                 snubberGeometry.computeBoundsTree()
                 const snubberMaterial = new THREE.MeshNormalMaterial()
                 const snubberMesh = new THREE.Mesh(snubberGeometry, snubberMaterial)
@@ -272,10 +274,10 @@ export default class Treadmill {
             this.initDefault()
         })
 
-        // const dataSetId = await vuforia.fetchDataSet('/resources/Treadmill.xml')
+        // const dataSetId = await vuforia.fetchDataSet('/Treadmill.xml')
         // const trackables = await vuforia.loadDataSet(dataSetId)
 
-        const dataSetId = await vuforia.fetchDataSet('/resources/Treadmill.xml')
+        const dataSetId = await vuforia.fetchDataSet('/Treadmill.xml')
         const trackables = await vuforia.loadDataSet(dataSetId)
 
         const treadmillAnchor = trackables.get('treadmill')

@@ -1,17 +1,20 @@
 import * as THREE from 'three'
 
-import App, {UpdateEvent} from '@/App'
-import WebLayer3D from 'three-web-layer'
+import App, {UpdateEvent} from '../app'
+import {default as bla, WebLayer3D} from 'three-web-layer'
 import Treadmill from './Treadmill'
 import PrideAPI from '../lib/PrideAPI'
 import PrideVue from './Pride.vue'
-import {vectors, vectors2, Q_IDENTITY, V_001} from '@/lib/SpatialUtils'
-import {SpatialMetrics} from '@/lib/SpatialMetrics'
-import {SpatialLayout} from '@/lib/SpatialLayout'
+// import {vectors, vectors2, Q_IDENTITY, V_001} from '@/lib/SpatialUtils'
+// import {SpatialMetrics} from '@/lib/SpatialMetrics'
+// import {SpatialLayout} from '@/lib/SpatialLayout'
 // import {SpatialPlacement, CameraSurface} from '@/lib/SpatialPlacement'
-import AdaptiveProperty from '@/lib/AdaptiveProperty'
-import { MeshBasicMaterial } from 'three';
+import AdaptiveProperty from '../lib/AdaptiveProperty'
+import * as ethereal from 'ethereal'
+// import { MeshBasicMaterial } from 'three';
 
+
+console.log(bla)
 const cursorGeometry = new THREE.SphereGeometry(0.008)
 
 export default class UI {
@@ -31,39 +34,39 @@ export default class UI {
         // pixelRatio: 3, 
         layerSeparation: 0.0001,
         onLayerCreate: (layer) => {
-            layer.layout.forceBoundsExclusion = true
-            layer.shouldApplyTargetLayout = false
-            layer.shouldApplyContentTargetLayout = false
-            const refresh = layer['_refreshTargetLayout']
-            layer['_refreshTargetLayout'] = () => {
-                refresh.call(layer)
-                layer.layout.reset()
-                if (layer.parentLayer) {
-                    layer.layout.targetParent = layer.parentLayer
-                    layer.position.copy(layer.target.position)
-                }
-                layer.content.layout.reset()
-                layer.layout.minBounds.min.set(-layer.bounds.width*WebLayer3D.PIXEL_SIZE/2, -layer.bounds.height*WebLayer3D.PIXEL_SIZE/2, 0)
-                layer.layout.minBounds.max.set(layer.bounds.width*WebLayer3D.PIXEL_SIZE/2, layer.bounds.height*WebLayer3D.PIXEL_SIZE/2, 0)
-                layer.content.layout.size.set(1,1,NaN)
-                layer.content.layout.fit = 'fill'
-            }
+            // layer.layout.forceBoundsExclusion = true
+            // layer.shouldApplyTargetLayout = false
+            // layer.shouldApplyContentTargetLayout = false
+            // const refresh = layer['_refreshTargetLayout']
+            // layer['_refreshTargetLayout'] = () => {
+            //     refresh.call(layer)
+            //     layer.layout.reset()
+            //     if (layer.parentLayer) {
+            //         layer.layout.targetParent = layer.parentLayer
+            //         layer.position.copy(layer.target.position)
+            //     }
+            //     layer.content.layout.reset()
+            //     layer.layout.minBounds.min.set(-layer.bounds.width*WebLayer3D.PIXEL_SIZE/2, -layer.bounds.height*WebLayer3D.PIXEL_SIZE/2, 0)
+            //     layer.layout.minBounds.max.set(layer.bounds.width*WebLayer3D.PIXEL_SIZE/2, layer.bounds.height*WebLayer3D.PIXEL_SIZE/2, 0)
+            //     layer.content.layout.size.set(1,1,NaN)
+            //     layer.content.layout.fit = 'fill'
+            // }
         }
     })
-    procedure = this.pride.getObjectByName('procedure')! as WebLayer3D
-    step = this.pride.getObjectByName('step')! as WebLayer3D
-    instruction = this.pride.getObjectByName('instruction')! as WebLayer3D
-    content = this.pride.getObjectByName('content')! as WebLayer3D
-    media = this.pride.getObjectByName('media')! as WebLayer3D
-    image = this.pride.getObjectByName('image')! as WebLayer3D
-    video = this.pride.getObjectByName('video')! as WebLayer3D
-    model = this.pride.getObjectByName('model')! as WebLayer3D
-    controls = this.pride.getObjectByName('controls') as WebLayer3D
-    backButton = this.pride.getObjectByName('back') as WebLayer3D
-    doneButton = this.pride.getObjectByName('done') as WebLayer3D
-    yesButton = this.pride.getObjectByName('yes') as WebLayer3D
-    noButton = this.pride.getObjectByName('no') as WebLayer3D
-    xrButton = this.pride.getObjectByName('xr-toggle')! as WebLayer3D
+    procedure = this.pride.querySelector('#procedure')! as WebLayer3D
+    step = this.pride.querySelector('#step')! as WebLayer3D
+    instruction = this.pride.querySelector('#instruction')! as WebLayer3D
+    content = this.pride.querySelector('#content')! as WebLayer3D
+    media = this.pride.querySelector('#media')! as WebLayer3D
+    image = this.pride.querySelector('#image')! as WebLayer3D
+    video = this.pride.querySelector('#video')! as WebLayer3D
+    model = this.pride.querySelector('#model')! as WebLayer3D
+    controls = this.pride.querySelector('#controls') as WebLayer3D
+    backButton = this.pride.querySelector('#back') as WebLayer3D
+    doneButton = this.pride.querySelector('#done') as WebLayer3D
+    yesButton = this.pride.querySelector('#yes') as WebLayer3D
+    noButton = this.pride.querySelector('#no') as WebLayer3D
+    xrButton = this.pride.querySelector('#xr-toggle')! as WebLayer3D
 
     // doneButton = new HTMLElement3D('')
     // skipButton = new HTMLElement3D('')
@@ -82,7 +85,7 @@ export default class UI {
     })
 
     snubberVisualSize = new AdaptiveProperty({
-        metric: () => SpatialMetrics.get(this.app.camera).getVisualFrustumOf(this.treadmill.snubberObject!).diagonal,
+        metric: () => ethereal.SpatialMetrics.get(this.app.camera).getVisualFrustumOf(this.treadmill.snubberObject!).diagonal,
         zones: [
             {state: 'small', threshold: 15, delay: 100},
             40,
@@ -91,7 +94,7 @@ export default class UI {
     })
 
     snubberDirection = new AdaptiveProperty({
-        metric: () => SpatialMetrics.get(this.app.camera).getVisualOffsetOf(this.treadmill.snubberObject!),
+        metric: () => ethereal.SpatialMetrics.get(this.app.camera).getVisualOffsetOf(this.treadmill.snubberObject!),
         zones: [
             {state: 'left', threshold: 15, delay: 100},
             -60,
@@ -215,39 +218,41 @@ export default class UI {
         
         // setup UI layout
         if (this.app.interactionSpace === 'world' && snubberObject.parent === this.app.scene) {
-            this.pride.layout.targetParent = this.data.xrMode ? this.treadmill.snubberObject : this.app.scene
-            this.pride.layout.size.setScalar(3)
-            this.pride.layout.align.set(0,0,-1)
+            this.pride.transitioner.parentTarget = this.data.xrMode ? this.treadmill.snubberObject : this.app.scene
+            this.pride.layout.relative.min.setScalar(-1.5)
+            this.pride.layout.relative.max.setScalar(-1.5)
             this.pride.layout.fit = 'cover'
         } else {
-            this.pride.layout.targetParent = this.app.camera // attach the UI to the camera
-            this.pride.layout.size.set(1,1,1) // size to entire screen 
+            this.pride.transitioner.parentTarget = this.app.camera // attach the UI to the camera
+            // fill screen
+            this.pride.layout.relative.setFromCenterAndSize(ethereal.V_000, ethereal.V_111) 
+            this.pride.layout.fitAlign.set(0,0,-0.5)
             this.pride.layout.fit = 'contain' // scale content to fit ('contain' is the default fit mode)
-            this.pride.position.set(0,0,-0.2) // position -0.2 meters away
+            this.pride.position.set(0,0,-0.5) // position -0.2 meters away
         }
         // this.pride.layout.update() will be called for this and all child layers 
         // when `this.pride.update()` is called
 
         // pull out the background div and place 10 meters away from the camera
-        this.pride.content.layout.targetParent = this.app.camera
-        this.pride.content.layout.size.set(1,1,1)
+        this.pride.content.transitioner.parentTarget = this.app.camera
+        this.pride.content.layout.relative.setFromCenterAndSize(ethereal.V_000, ethereal.V_111) 
         this.pride.content.layout.fit = 'fill' // fill the view
         this.pride.content.position.set(0,0,-10)
-        this.pride.contentTargetOpacity = this.data.xrMode ? 0 : 1
+        // this.pride.contentOpacity.target = this.data.xrMode ? 0 : 1
         // this.pride.contentTargetOpacity = 0
 
 
         if (this.data.xrMode) {
             if (this.treadmill.treadmillAnchorObject && this.treadmill.treadmillAnchorObject.parent) {
                 snubberObject.layout.reset()
-                snubberObject.layout.targetParent = this.treadmill.treadmillAnchorObject
+                snubberObject.transitioner.parentTarget = this.treadmill.treadmillAnchorObject
                 snubberObject.position.copy(this.treadmill.snubberTargetPosition)
-                snubberObject.quaternion.setFromAxisAngle(V_001, Math.PI)
+                snubberObject.quaternion.setFromAxisAngle(ethereal.V_001, Math.PI)
             } else if (snubberObject.parent !== this.app.scene) {
                 if (this.app.interactionSpace === 'screen' || 
                     this.app.interactionSpace === 'world' && this.app.camera.position.y > 0.1) {
                     snubberObject.layout.reset()
-                    snubberObject.layout.targetParent = this.app.scene
+                    snubberObject.transitioner.parentTarget = this.app.scene
                     snubberObject.position.set(0,0,-1)
                     snubberObject.scale.setScalar(4)
                     snubberObject.quaternion.copy(this.app.camera.quaternion)
@@ -256,13 +261,14 @@ export default class UI {
             }
         } else if (this.pride.parent === this.app.camera) {
             snubberObject.layout.reset()
-            snubberObject.layout.setTargetParent(this.model)
-            snubberObject.layout.setAnchor(0,0,-1)
-            snubberObject.layout.size.setScalar(0.8)
+            snubberObject.transitioner.parentTarget = this.model
+            // snubberObject.layout.setAnchor(0,0,-1)
+            snubberObject.layout.relative.min.setScalar(-0.8)
+            snubberObject.layout.relative.max.setScalar(0.8)
             snubberObject.scale.set(1,1,0.3)
         } 
         // since snubberObject is not a WebLayer3D instance, we should update it's layout directly
-        snubberObject.layout.update(lerpFactor)
+        snubberObject.transitioner.update(lerpFactor)
         
 
         // transitioner = SpatialTransitioner.get(this.content)
@@ -278,21 +284,20 @@ export default class UI {
         // transitioner.update(lerpFactor)
 
         if (this.xrMode.is('true')) {
-            const instructionLayout = this.instruction.layout
-            instructionLayout.reset()
-            instructionLayout.targetParent = this.treadmill.snubberObject
-            instructionLayout.setAnchor('right',0,0)
-            instructionLayout.setAlign('left',0,0)
-            instructionLayout.size.set(1,1,1)
+            const i = this.instruction
+            i.layout.reset()
+            i.layout.relative.min.set(1, -1, NaN)
+            i.layout.relative.max.set(NaN, 1, NaN)
+            i.transitioner.parentTarget = this.treadmill.snubberObject
         }
 
         if (this.xrMode.is('true')) {
-            const mediaLayout = this.media.layout
-            mediaLayout.reset()
-            mediaLayout.targetParent = this.treadmill.snubberObject
-            mediaLayout.setAnchor('left',0,0)
-            mediaLayout.setAlign('right',0,0)
-            mediaLayout.setSize(1, 1, 1)
+            const m = this.instruction
+            m.layout.reset()
+            m.layout.relative.min.set(NaN, -1, NaN)
+            m.layout.relative.max.set(-1, 1, NaN)
+            // m.layout.setSize(1, 1, 1)
+            m.transitioner.parentTarget = this.treadmill.snubberObject
             // mediaLayout.sizeToFit('contain', this.app.camera, [obstacles])
 
             // mediaLayout.align.set(0,0,0)
@@ -347,8 +352,13 @@ export default class UI {
         // this.video.shouldApplyTargetLayout = false
         // this.pride.traverseLayers(this._toggleLayoutBounds)
         
-        this.pride.traverseChildLayers(this._setRenderOrder)
-        this.pride.update(lerpFactor, this._updateLayout)
+        this.pride.updateWorldMatrix(true, true)
+        this.pride.update(event.deltaTime, (layer) => {
+            layer.transitioner.active = true
+            layer.content.transitioner.active = true
+            layer.transitioner.update(event.deltaTime, false)
+            layer.content.transitioner.update(event.deltaTime, false)
+        })
 
         // if (this.snubberVisualSize.is('large')) {
 
@@ -372,16 +382,4 @@ export default class UI {
     //         makeTextSprite(step.procedureTitle, {})
     //     )
     // }
-
-    _updateLayout(layer:WebLayer3D, lerp:number) {
-        WebLayer3D.UPDATE_DEFAULT(layer, lerp)
-        layer.layout.update(lerp)
-        layer.content.layout.update(lerp)
-    }
-
-    _setRenderOrder(layer:WebLayer3D) {
-        if (!layer.parentLayer) return
-        const index = layer.parentLayer.childLayers.indexOf(layer)
-        layer.mesh.renderOrder = layer.level + index*0.001
-    }
 }

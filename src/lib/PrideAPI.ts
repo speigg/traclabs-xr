@@ -54,7 +54,7 @@ const data = {
     step: '',
     instruction: 'test',
     image: '',
-    video: 'armWiggleDemonstrated.mov',
+    video: '/armWiggleDemonstrated.mov',
     elementType: '' as 'Info'|'Instruction',
     elementSubType: '' as 'ManualInstruction'|'Conditional',
     // video: 'https://prideview-ar.traclabs.com/a7e79a1a-acff-43df-a1dc-f12f6bfcd6c9/4529_T2_Monthly_Maintenance_Top_Level_files/armWiggleDemonstrated.mov',

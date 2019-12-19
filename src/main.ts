@@ -36,7 +36,7 @@ const app = new App({
         app.treadmill.enterXR(event)
     },
     onExitXR: (event) => {
-        app.ui.data.xrMode = false
+        app.ui.data.immersiveMode = false
     }
 })
 

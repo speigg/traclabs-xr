@@ -42,6 +42,8 @@ export default class AppBase {
 
     pointer = new THREE.Vector2()
     raycaster = new THREE.Raycaster()
+    mouseRay = [this.raycaster.ray]
+    immersiveRays = new Set<THREE.Object3D>()
 
     // a map of XRCoordinateSystem instances and their Object3D proxies to be updated each frame
     xrObjects = new Map<any, THREE.Object3D>() // XRCoordinateSystem -> Three.js Object3D Map
@@ -63,7 +65,7 @@ export default class AppBase {
         renderer.setAnimationLoop(this.onAnimate)
 
         window.addEventListener('vrdisplaypresentchange', (evt) => {
-            if (!this.xrPresenting) this._exitXR()
+            setTimeout(() => { if (!this.xrPresenting) this._exitXR(), 10 })
         }, false)
 
         document.documentElement.style.width = '100%'
@@ -116,7 +118,7 @@ export default class AppBase {
         
         // setup VRController
         window.addEventListener( 'vr controller connected', ( event:any ) => {
-            var controller = event.detail
+            const controller = event.detail
             this.scene.add( controller )
             controller.standingMatrix = renderer.vr.getStandingMatrix()
             controller.head = this.camera
@@ -139,14 +141,16 @@ export default class AppBase {
             handleMesh.position.y = -0.05
             controllerMesh.add( handleMesh )
             controller.add( controllerMesh )
-            controller.addEventListener( 'primary press began', function( event:any ){
+            controller.addEventListener( 'primary press began', ( event:any ) => {
                 controllerMaterial.color.setHex( meshColorOn )
             })
-            controller.addEventListener( 'primary press ended', function( event:any ){
+            controller.addEventListener( 'primary press ended', ( event:any ) => {
                 controllerMaterial.color.setHex( meshColorOff )
             })
-            controller.addEventListener( 'disconnected', function( event:any ){
+            this.immersiveRays.add(controller)
+            controller.addEventListener( 'disconnected', ( event:any ) => {
                 controller.parent.remove( controller )
+                this.immersiveRays.delete(controller)
             })
         })
     }
@@ -154,7 +158,6 @@ export default class AppBase {
     webLayers = new Set<WebLayer3D>()
 
     registerWebLayer(layer:WebLayer3D) {
-        layer.interactionRays = [this.raycaster.ray]
         this.webLayers.add(layer)
     }
 
@@ -183,13 +186,12 @@ export default class AppBase {
     
     onAnimate = () => {
         const canvas = this.renderer.domElement
-        if (!this.xrPresenting) {
-            this._setSize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio)
-        } else {
-            this.renderer.setDrawingBufferSize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio)
-        }
+        if (!this.xrPresenting) this._setSize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio)
         const delta = Math.min(this.clock.getDelta(), 1/60)
         this.update(delta)
+        for (const layer of this.webLayers) {
+            layer.interactionRays = this.interactionSpace === 'world' ? Array.from(this.immersiveRays) : this.mouseRay
+        }
         this.renderer.render(this.scene, this.camera)
     }
 
@@ -204,15 +206,16 @@ export default class AppBase {
         
 
         if (this.xrPresenting) {
+            this.renderer.setClearColor(new THREE.Color('blue'))
             this._wasPresenting = true
             const vrCamera = this.renderer.vr.getCamera(this.camera) as THREE.ArrayCamera
             this.camera.matrix.copy(vrCamera.matrix)
             this.camera.matrix.decompose(this.camera.position, this.camera.quaternion, this.camera.scale)
             this.camera.projectionMatrix.copy(vrCamera.projectionMatrix)
             this.camera.projectionMatrixInverse.getInverse(this.camera.projectionMatrix)
-            this.camera.updateWorldMatrix(true, false)
-            this.camera.updateMatrixWorld()
+            this.camera.updateWorldMatrix(true, true)
         } else {
+            this.renderer.setClearColor(new THREE.Color('white'))
             if (this._wasPresenting) {
                 this._wasPresenting = false
                 this._exitXR()
@@ -251,8 +254,8 @@ export default class AppBase {
         }
 
         // emit update event
-        this._config!.onUpdate({type: 'update', deltaTime})
         this.raycaster.setFromCamera(this.pointer, this.camera)
+        this._config!.onUpdate({type: 'update', deltaTime})
     }
 
     public interactionSpace = 'screen' as 'screen' | 'world'
@@ -353,9 +356,11 @@ export default class AppBase {
     }
 
     private _exitXR() {
+        this._config.onExitXR({type:'exitxr'})
+        this.camera.position.set(0,0,0)
+        this.camera.quaternion.set(0,0,0,1)
         this.interactionSpace = 'screen'
         this.renderer.vr.enabled = false
-        this._config.onExitXR({type:'exitxr'})
     }
 
     lastResize = -Infinity

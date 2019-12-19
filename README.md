@@ -7,7 +7,7 @@ npm install
 
 ### Compiles and hot-reloads for development
 ```
-npm run serve
+npm run start
 ```
 
 ### Compiles and minifies for production
@@ -15,15 +15,7 @@ npm run serve
 npm run build
 ```
 
-### Run your tests
-```
-npm run test
-```
+# Tutorial
 
-### Lints and fixes files
-```
-npm run lint
-```
+## WebXR/WebVR Setup
 
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).

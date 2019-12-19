@@ -1,6 +1,6 @@
 
 <template>
-    <div id="pride" data-layer-pixel-ratio="0.1" v-bind:class="{xr:xrMode}">
+    <div id="pride" data-layer-pixel-ratio="0.1" v-bind:class="{xr:immersiveMode}">
         <div id="procedure" data-layer><img data-layer class="logo" src="../static/pride-view.png"/>Procedure: {{pride.procedure}}</div>
         <div id="step" data-layer>Step: <span id="type">{{pride.elementSubType}}</span> {{pride.step}}</div>
         <div data-layer id="content">
@@ -18,7 +18,7 @@
             <div data-layer v-show="pride.elementSubType === 'Conditional'" data-layer-hover-depth="1" class="button" id="yes">Yes</div>
             <div data-layer v-show="pride.elementSubType === 'Conditional'" data-layer-hover-depth="1" class="button" id="no">No</div>
             <div data-layer v-show="pride.elementSubType === 'Bla'" data-layer-hover-depth="1" class="button" id="no">Record</div>
-            <div data-layer data-layer-hover-depth="1" id="xr-toggle"><b>{{xrMode ? 'Exit XR' : 'Enter XR'}}</b></div>
+            <div data-layer data-layer-hover-depth="1" id="immersive-toggle"><b>{{immersiveMode ? 'Flat' : 'Immersive'}}</b></div>
         </div>
     </div>
 </template>
@@ -144,10 +144,10 @@ export default Vue.extend()
         align-self: stretch;
         --font-size: 1.4em;
     }
-    #controls .hover {
+    #controls :hover {
         background-color: grey;
     }
-    #xr-toggle {
+    #immersive-toggle {
         float: right;
         background-color: black;
         color: white;

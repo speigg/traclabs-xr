@@ -15,7 +15,6 @@ import {makeTextSprite} from '../lib/label-utils'
 
 
 interface Annotation {
-    bla?: 'hi',
     text: string
     anchorPoint: [number, number, number]
 }

@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import {WebLayer3D} from 'three-web-layer'
 import {VRController} from './lib/VRController'
+import { V_100 } from 'ethereal'
 
 export interface EnterXREvent {
     type: 'enterxr'
@@ -141,16 +142,48 @@ export default class AppBase {
             handleMesh.position.y = -0.05
             controllerMesh.add( handleMesh )
             controller.add( controllerMesh )
+
+            const rayGeometry = new THREE.CylinderGeometry()
+            const rayMesh = new THREE.Mesh(rayGeometry)
+            rayMesh.position.set(0,0,-50)
+            rayMesh.scale.set(0.002, 100, 0.002)
+            rayMesh.quaternion.setFromAxisAngle(V_100, - Math.PI / 2)
+            controller.add(rayMesh)
+
+            const ray = new THREE.Object3D()
+            controller.add(ray)
+            ray.quaternion.setFromAxisAngle(V_100, Math.PI)
+            // ray.add(new THREE.AxesHelper(1))
+
+            this.immersiveRays.add(ray)
+            controller.addEventListener( 'disconnected', ( event:any ) => {
+                controller.parent.remove( controller )
+                this.immersiveRays.delete(ray)
+            })
+
+            const rayPosition = new THREE.Vector3
+            const rayDirection = new THREE.Vector3
+
+            const onSelect = () => {
+                ray.getWorldPosition(rayPosition)
+                ray.getWorldDirection(rayDirection)
+                this.raycaster.ray.set(rayPosition, rayDirection)
+                for (const layer of this.webLayers) {
+                    const hit = layer.hitTest(this.raycaster.ray)
+                    if (hit) {
+                        hit.target.click()
+                        hit.target.focus()
+                        console.log('hit', hit.target, hit.layer)
+                    }
+                }
+            }
+            
             controller.addEventListener( 'primary press began', ( event:any ) => {
                 controllerMaterial.color.setHex( meshColorOn )
+                onSelect()
             })
             controller.addEventListener( 'primary press ended', ( event:any ) => {
                 controllerMaterial.color.setHex( meshColorOff )
-            })
-            this.immersiveRays.add(controller)
-            controller.addEventListener( 'disconnected', ( event:any ) => {
-                controller.parent.remove( controller )
-                this.immersiveRays.delete(controller)
             })
         })
     }

@@ -3,7 +3,7 @@ const MOCK_PROCEDURES = {
 }
 
 // const BASE_URL = 'http://defiant3.local:8025/AR_server/'
-const BASE_URL = 'http://prideview-ar.traclabs.com:8025/AR_server/'
+const BASE_URL = '//prideview-ar.traclabs.com:8025/AR_server/'
 
 
 class InstructionType {

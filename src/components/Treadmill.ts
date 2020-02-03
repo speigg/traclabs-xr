@@ -160,7 +160,7 @@ export default class Treadmill {
         // this.snubberObject.add(this.grid)
 
         this.snubberMeshPromise = new Promise((resolve) => {
-            this.stlLoader.load('/fullSnubberSimplified.stl', (snubberGeometry) => {
+            this.stlLoader.load('fullSnubberSimplified.stl', (snubberGeometry) => {
                 snubberGeometry.computeBoundsTree()
                 const snubberMaterial = new THREE.MeshNormalMaterial()
                 const snubberMesh = new THREE.Mesh(snubberGeometry, snubberMaterial)

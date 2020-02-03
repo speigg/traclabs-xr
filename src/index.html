@@ -10,6 +10,11 @@
     <!-- <script data-consolejs-channel="bbedf58c-734e-9899-e7db-dcd3fcf532b8" src="https://remotejs.com/agent/agent.js"></script> -->
         
     <script>
+        
+  var newBase = document.createElement("base");
+  newBase.setAttribute("href",  '/' + window.location.pathname.split('/')[1]);
+  document.getElementsByTagName("head")[0].appendChild(newBase);
+
       // window.addEventListener('error', function (ev) {
       //   alert(ev.filename + '[' + ev.lineno + ']: ' + ev.message)
       // })

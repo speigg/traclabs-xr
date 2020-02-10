@@ -13,7 +13,7 @@
         
   const newBase = document.createElement("base");
   const pathname = window.location.pathname.split('/')[1] 
-  newBase.setAttribute("href",  '/' + pathname ? pathname + '/' : '');
+  newBase.setAttribute("href",  '/' + (pathname ? pathname + '/' : ''));
   document.getElementsByTagName("head")[0].appendChild(newBase);
 
       // window.addEventListener('error', function (ev) {

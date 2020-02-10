@@ -11,8 +11,9 @@
         
     <script>
         
-  var newBase = document.createElement("base");
-  newBase.setAttribute("href",  '/' + window.location.pathname.split('/')[1] + '/');
+  const newBase = document.createElement("base");
+  const pathname = window.location.pathname.split('/')[1] 
+  newBase.setAttribute("href",  '/' + pathname ? pathname + '/' : '');
   document.getElementsByTagName("head")[0].appendChild(newBase);
 
       // window.addEventListener('error', function (ev) {

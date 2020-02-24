@@ -1,3 +1,6 @@
+import "core-js/stable";
+import "regenerator-runtime/runtime";
+
 import AppBase from './app'
 import Treadmill from './components/Treadmill'
 import UI from './components/UI'

@@ -4,12 +4,17 @@
     padding-left: calc(env(safe-area-inset-left) + 5px);
     padding-right: calc(env(safe-area-inset-right) + 5px);
     padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+    display: -webkit-box;
     display: flex;
-    align-items: flex-start;
-    flex-direction: column;
+    -webkit-box-align: start;
+            align-items: flex-start;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+            flex-direction: column;
     min-height: 100%;
     /* background-color:rgba(255,255,255,0.7); */
     font-family: 'Inconsolata', monospace;
+    background: -webkit-gradient(linear, left top, left bottom, from(#bef67dcc), to(#7aece2cc));
     background: linear-gradient(#bef67dcc, #7aece2cc);
     overflow: hidden;
     box-sizing: border-box;
@@ -17,16 +22,21 @@
 }
 @media (min-width: 640px) {
 :not(.xr) #content[data-v-91f244] {
-        flex-direction: row;
+        -webkit-box-orient: horizontal;
+        -webkit-box-direction: normal;
+                flex-direction: row;
 }
 :not(.xr) #instruction[data-v-91f244] {
-        flex: 2;
+        -webkit-box-flex: 2;
+                flex: 2;
 }
 :not(.xr) #media[data-v-91f244] {
-        flex: 3;
+        -webkit-box-flex: 3;
+                flex: 3;
 }
 :not(.xr) #model[data-v-91f244] {
-        flex: 3;
+        -webkit-box-flex: 3;
+                flex: 3;
 }
 }
 
@@ -41,7 +51,8 @@
 }
 */
 .xr #model[data-v-91f244] {
-    flex: 0 0 0;
+    -webkit-box-flex: 0;
+            flex: 0 0 0;
 }
 .logo[data-v-91f244] {
     width: 40px;
@@ -77,20 +88,26 @@
     margin: 5px;
 }
 #content[data-v-91f244] {
+    display: -webkit-box;
     display: flex;
-    flex-direction: column;
-    flex-grow: 1;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+            flex-direction: column;
+    -webkit-box-flex: 1;
+            flex-grow: 1;
     margin: 5px;
     align-self: stretch;
 }
 #model[data-v-91f244] {
-    flex: 1;
+    -webkit-box-flex: 1;
+            flex: 1;
     background-color: rgba(0,0,255,0.1);
     border-radius: 5px;
     margin: 5px;
 }
 #media[data-v-91f244] {
-    flex: 1;
+    -webkit-box-flex: 1;
+            flex: 1;
     position: relative;
     margin: 5px;
     background-color: black;

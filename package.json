@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "prebuild": "rimraf dist && rimraf docs",
-        "build": "parcel build src/index.html -d docs",
+        "build": "parcel build src/index.html -d docs --public-url /traclabs-xr/",
         "start": "npm run prebuild && parcel src/index.html -d docs --host 0.0.0.0"
     },
     "staticFiles": {

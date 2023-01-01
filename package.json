@@ -29,7 +29,7 @@
         "@types/node": "^13.7.1",
         "@vue/component-compiler-utils": "^3.0.2",
         "autoprefixer": "^9.7.1",
-        "parcel": "^1.11.0",
+        "parcel": "^2.8.2",
         "parcel-plugin-static-files-copy": "^2.2.1",
         "rimraf": "^2.6.2",
         "typescript": "^3.7.2",
